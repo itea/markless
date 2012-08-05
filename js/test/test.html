@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <script language="javascript" src="http://code.jquery.com/jquery-1.7.2.js"></script>
+  <script language="javascript" src="../markless.js"></script>
+  <script language="javascript">
+  var test = function(s, pd, ctx) {
+      console.log(s);
+      try {
+          var e = markless(s, pd, ctx);
+          console.log(e.outerHTML || e.textContent);
+          return e;
+      } catch (e) {
+          console.log(e.stack);
+          return e;
+      }
+  };
+
+  $(function () {
+      var lines = $("#testcases")[0].firstChild.textContent.split(/\n/),
+          i, j, line;
+      for (i = 0, j = lines.length; i<j; i++) {
+          line = lines[i];
+          if (line.search(/\w/) > -1) {
+              test(line);
+          }
+      }
+
+      document.body.appendChild(markless.template($("#template1")[0].firstChild.textContent));
+  });
+  </script>
+  <script type="text/x-markless" id="testcases">
+div#id2.short
+div#id2.short > p > "Nice to meet you!"
+div#id2.short > "hello, world"
+div  'hello, world'
+div > span > "hello,\n world"
+div > p "hello, world" > span "hello"
+div > p class="ac" "hello, world" > span "hello"
+div > span class="show" style="background: yellow;" 
+div > span style="background: yellow;" > "hello"
+div > span style="background: yellow;" "hello"
+  </script>
+  <script type="text/x-markless" id="template1">
+# a line with leading # is a line comment
+
+div#hi
+  h1.maroon "hello, world"
+  p "HTML is urgly. Use markless."
+    strong """Yes."""
+    br
+    """This is a text block.
+    """
+    br
+    "this is 2"
+div
+  h2 "test"
+  p "abcdefg" > strong "no"
+span "there"
+  </script>
+  </head>
+  <body>
+  </body>
+</html>
+

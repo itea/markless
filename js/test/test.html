@@ -26,7 +26,7 @@
           }
       }
 
-      document.body.appendChild(markless.template($("#template1")[0].firstChild.textContent));
+      document.body.appendChild($("#template1")[0].firstChild.textContent.markmore());
   });
   </script>
   <script type="text/x-markless" id="testcases">
@@ -34,6 +34,45 @@ div#id2.short
 div#id2.short > p > "Nice to meet you!"
 div#id2.short > "hello, world"
 div  'hello, world'
+div  'hello, \'world'
+div  'hello, \\'ERROR'
+div  'hello, "world'
+div  "hello, 'workd"
+div  "hello, \"world"
+div  "hello, \\"ERROR"
+div  "hello, \"\"\"world"
+div ""
+div ''
+div """"""
+div ''''''
+div > 'hello, world'
+div>'hello, ERROR'
+div> 'hello, ERROR'
+div >'hello, world'
+div > 'hello, \'world'
+div > 'hello, \\'ERROR'
+div > 'hello, "world'
+div > "hello, 'workd"
+div > "hello, \"world"
+div > "hello, \\"ERROR"
+div > "hello, \"\"\"world"
+div """ hello """
+div """ this is \"""."""
+div """ this is """ERROR"""
+div > """ this is \"""."""
+div > """ this is """ERROR"""
+div class="abc"
+div class  =  "abc"   
+div class="ERROR\"
+div class="notERROR\""
+div class="notERROR\"abc"
+div class="ERROR\"abc
+div class=''
+div class=""
+div class='"'
+div class="'"
+div class='\''
+div class="\""
 div > span > "hello,\n world"
 div > p "hello, world" > span "hello"
 div > p class="ac" "hello, world" > span "hello"
@@ -43,6 +82,7 @@ div > span style="background: yellow;" "hello"
   </script>
   <script type="text/x-markless" id="template1">
 # a line with leading # is a line comment
+    # try another
 
 div#hi
   h1.maroon "hello, world"
@@ -50,7 +90,12 @@ div#hi
     strong """Yes."""
     br
     """This is a text block.
+    test \"""
+    and ""
+    and "
+    and '
     """
+    input:date
     br
     "this is 2"
 div

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-  <script language="javascript" src="http://code.jquery.com/jquery-1.7.2.js"></script>
+  <script language="javascript" src="http://code.jquery.com/jquery-1.8.0.js"></script>
   <script language="javascript" src="../markless.js"></script>
   <script language="javascript">
   var test = function(s, pd, ctx) {
@@ -27,6 +27,16 @@
       }
 
       document.body.appendChild($("#template1")[0].firstChild.textContent.markmore());
+
+      console.log(markless.get_string('"abdfsdfasdf\\n\\"sef"'));
+      var t0 = + new Date();
+      for (i=0; i< 5000; i++) {
+          //new Function('return "abdfsdfasdf\\n\\"sef"');
+          //(function() {return "asdfjsdf\\snsd\td";})
+          //"asdlfasdfkjasw;aoeifjhwapoenffsdaljkfsadkfj".substring(i%9, i%9+18);
+          markless.get_string('"abdfsdfasdf\\n\\"sef"');
+      };
+      console.log(+ new Date() - t0);
   });
   </script>
   <script type="text/x-markless" id="testcases">
@@ -73,6 +83,7 @@ div class='"'
 div class="'"
 div class='\''
 div class="\""
+div class="abc"style="padding:0px"
 div > span > "hello,\n world"
 div > p "hello, world" > span "hello"
 div > p class="ac" "hello, world" > span "hello"

@@ -4,12 +4,16 @@
  * MIT-LICENSE
  */
 var markless = (function() {
-  var _trim = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); };
-  var trim = function(s) { return _trim.call(s); };
-  var _transfor = function(s) {
+var
+  _trim = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
+
+  trim = function(s) { return _trim.call(s); },
+
+  _transfor = function(s) {
       return (new Function('return '+ s))();
-  };
-  var _pesudo_map = {
+  },
+
+  _pesudo_map = {
       'text': ['type', 'text'],
       'password': ['type', 'password'],
       'button': ['type', 'button'],
@@ -35,9 +39,9 @@ var markless = (function() {
       'disabled': ['disabled', 'disabled'],
       'readonly': ['readonly', 'readonly'],
       'checked': ['checked', 'checked']
-  };
+  },
 
-  var _ctx_node = function(s, ctx) {
+  _ctx_node = function(s, ctx) {
       if (s[0] !== '$') { throw new Error('Not a context Node variable format'); }
       var i = 0, j, str = s, quote = s[0], name, v;
       j = str.search(/\s|$/);
@@ -46,16 +50,70 @@ var markless = (function() {
       if (v == null) return [document.createTextNode(''), trim(str.substring(j))];
       else if (v instanceof HTMLElement) return [v, trim(str.substring(j))];
       else return [document.createTextNode(v.toString()), trim(str.substring(j))];
-  };
-  var _find_end_quote = function(str, quote, start) {
+  },
+
+  _find_end_quote = function(str, quote, start) {
       var j = start || 0, l = quote.length;
       do {
           j = str.indexOf(quote, j + l);
           if (j === -1) { throw new Error('Missing end quote: ' + str); }
       } while (str[j -1] === '\\');
       return j;
-  };
-  var _text = function(s, ctx) {
+  },
+
+  _parse_string = function(str, start) {
+      start = start || 0;
+      str = str.substring(start);
+      var ch = str[0], at = 1, quote = str[0],
+          hex, i, uffff, strings = [],
+          special = new RegExp('[\\\\' + quote + ']');
+          next = function() {
+              return ch = str.charAt(at ++);
+          },
+          find = function() {
+              var at0 = at;
+              at += str.substring(at).search(special);
+              strings.push(str.substring(at0, at));
+              return ch = str.charAt(at ++);
+          },
+          escapee = {
+              '"':  '"',
+              '\\': '\\',
+              '/':  '/',
+              'b':  '\b',
+              'f':  '\f',
+              'n':  '\n',
+              'r':  '\r',
+              't':  '\t'
+          };
+      
+      while (find()) {
+          if (ch === quote) {
+              return [ strings.join(''), start + at ];
+          }
+          if (ch === '\\') {
+              next();
+              if (ch === 'u') {
+                  uffff = 0;
+                  for (i = 0; i < 4; i += 1) {
+                      hex = parseInt(next(), 16);
+                      if (!isFinite(hex)) {
+                          break;
+                      }
+                      uffff = uffff * 16 + hex;
+                  }
+                  strings.push(String.fromCharCode(uffff));
+              } else if (typeof escapee[ch] === 'string') {
+                  strings.push(escapee[ch]);
+              } else {
+                  break;
+              }
+          }
+      }
+      throw new Error('Bad string');
+  },
+
+  _text = function(s, ctx) {
       var j = 0, str = s, quote = s[0], group, val;
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
@@ -67,8 +125,9 @@ var markless = (function() {
           j++;
       }
       return [document.createTextNode(val), trim(str.substring(j))];
-  };
-  var _element = function(s, ctx) {
+  },
+
+  _element = function(s, ctx) {
       var group = (/^\s*(\w+)(#[\d\w-]+)?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(&[\d\w\.-]+)?(?:\s+([^\s]+[^\0]*)?)?$/).exec(s);
       //console.log(group);
       if (!group) { throw new Error('Incorrect element expression: '+ s); }
@@ -105,8 +164,9 @@ var markless = (function() {
            }
       }
       return [element, null];
-  };
-  var _set_attrs = function(s, element, ctx) {
+  },
+
+  _set_attrs = function(s, element, ctx) {
       var i = 0, j, str = s, quote, name, val;
       while (str.length > 0) {
           if (str[0] === '>' || str[0] === '"' || str[0] === "'" || str[0] === '$') { return str; }
@@ -125,11 +185,13 @@ var markless = (function() {
 
           element.setAttribute(name, val);
 
-          str = trim(str.substring(j +1));
+          if (/^\S$/.test(str[j +1])) { throw new Error('Attributes should be separated by blankspace.'); }
+          str = trim(str.substring(j +2));
       }
       return "";
-  };
-  var _set_text = function(str, element, ctx) {
+  },
+
+  _set_text = function(str, element, ctx) {
       var j = 0, quote = str[0], val;
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
@@ -146,8 +208,9 @@ var markless = (function() {
           element.appendChild(document.createTextNode(val));
       }
       return str.substring(j);
-  };
-  var _set_ctx_text = function(s, element, ctx) {
+  },
+
+  _set_ctx_text = function(s, element, ctx) {
       if (s[0] !== '$') { throw new Error('Not a context variable format'); }
       var i = 0, j, str = s, quote = s[0], name, val;
       j = str.search(/\s|$/);
@@ -160,13 +223,15 @@ var markless = (function() {
           element.appendChild(document.createTextNode(val.toString()));
       }
       return str.substring(j);
-  };
-  var _fn_idx = {
+  },
+
+  _fn_idx = {
       '$': _ctx_node,
       '"': _text,
       "'": _text
-      };
-  var _expression = function(s, ctx) {
+  },
+
+  _expression = function(s, ctx) {
       s = s.replace(/^\s*/, '');
       ctx = ctx || {};
       var rt, fn = _fn_idx[s[0]] || _element;
@@ -179,10 +244,10 @@ var markless = (function() {
           }
       }
       return rt[0];
-  };
+  },
 
-// functions below are for markmore
-  var _addjust_stack = function(indent, element_stack, indention_stack) {
+  // functions below are for markmore
+  _addjust_stack = function(indent, element_stack, indention_stack) {
       var pop_num = 0, first_indent, last_indent, got = false, i;
       if (indention_stack.length !== 0) {
           last_indent = indention_stack[indention_stack.length -1];
@@ -219,13 +284,15 @@ var markless = (function() {
           indention_stack.pop();
           element_stack.pop();
       }
-  };
-  var _line_mode_1 = function(s, ctx, element_stack, indention_stack, mode) {
+  },
+
+  _line_mode_1 = function(s, ctx, element_stack, indention_stack, mode) {
       var text_node = document.createTextNode(s + '\n');
       element_stack[element_stack.length -1].appendChild(text_node);
       return mode;
-  };
-  var _line_mode_0 = function(s, ctx, element_stack, indention_stack, mode) {
+  },
+
+  _line_mode_0 = function(s, ctx, element_stack, indention_stack, mode) {
       var indent = s.substring(0, s.search(/[^ \t]/)),
           element = _expression(s, ctx);
       _addjust_stack(indent, element_stack, indention_stack);
@@ -233,8 +300,9 @@ var markless = (function() {
       element_stack.push(element);
       indention_stack.push(indent);
       return mode;
-  };
-  var _line = function(s, ctx, element_stack, indention_stack, mode) {
+  },
+
+  _line = function(s, ctx, element_stack, indention_stack, mode) {
       var group;
       switch (mode) {
       case 0: // expression mode
@@ -267,9 +335,9 @@ var markless = (function() {
           }
           return _line_mode_1(s, ctx, element_stack, indention_stack, mode);
       }
-  };
+  },
 
-  var _markmore = function(str, ctx) {
+  _markmore = function(str, ctx) {
       var lines = str.split(/\n/),
           element_stack = [ fragment = document.createDocumentFragment() ],
           indention_stack = [],
@@ -298,5 +366,6 @@ var markless = (function() {
   }
 
   _expression.markmore = _markmore;
+  _expression.get_string = _parse_string;
   return _expression;
 })()

@@ -1,13 +1,16 @@
 /* Markless
- * itea 2012-07-30
+ * itea 2012
  * https://github.com/itea/markless
  * MIT-LICENSE
  */
 var markless = (function() {
+
 var
   _trim = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
 
   trim = function(s) { return _trim.call(s); },
+
+  _element_regexp = /^\s*(\w+)(#[\d\w-]+)?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(&[\d\w\.-]+)?(?:\s+([^\s]+[^\0]*)?)?$/,
 
   _transfor = function(s) {
       return (new Function('return '+ s))();
@@ -62,22 +65,48 @@ var
   },
 
   _parse_string = function(str, start) {
+
+      /** Borrowed some code from json_parse.js by crokford. */
       start = start || 0;
       str = str.substring(start);
-      var ch = str[0], at = 1, quote = str[0],
+
+      var ch = str[0], at = 1, quote = ch, at_quote = str.indexOf(quote, at),
           hex, i, uffff, strings = [],
-          special = new RegExp('[\\\\' + quote + ']');
+
           next = function() {
               return ch = str.charAt(at ++);
           },
+
           find = function() {
-              var at0 = at;
-              at += str.substring(at).search(special);
-              strings.push(str.substring(at0, at));
-              return ch = str.charAt(at ++);
+
+              if (at_quote < at) {
+                  at_quote = str.indexOf(quote, at);
+                  if (at_quote === -1) {
+                      throw new Exception('expecting end quote: ' + str);
+                  }
+              }
+              var at0 = at, m;
+              at = str.indexOf('\\', at);
+              if (at === -1) {
+                  at = at_quote;
+              } else if ( at > at_quote) {
+                  m = at_quote;
+                  at_quote = str.indexOf(quote, at);
+                  at = m;
+
+                  if (at_quote === -1) {
+                      throw new Exception('expecting end quote: ' + str);
+                  }
+              }
+              if (at0 !== at) {
+                  strings.push(str.substring(at0, at));
+              }
+              return ch = str.charAt(at++);
           },
+
           escapee = {
               '"':  '"',
+              "'":  "'",
               '\\': '\\',
               '/':  '/',
               'b':  '\b',
@@ -110,40 +139,46 @@ var
               }
           }
       }
-      throw new Error('Bad string');
+      throw new Error('Bad string: ' + str);
   },
 
   _text = function(s, ctx) {
       var j = 0, str = s, quote = s[0], group, val;
+
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
           val = str.substring(3, j);
           j += 3;
       } else {
-          j = _find_end_quote(str, quote, 0);
-          val = _transfor(str.substring(0, j+1));
-          j++;
+          group = _parse_string(str);
+          val = group[0];
+          j = group[1];
+          //j = _find_end_quote(str, quote, 0);
+          //val = _transfor(str.substring(0, j+1));
+          //j++;
       }
-      return [document.createTextNode(val), trim(str.substring(j))];
+      return [ document.createTextNode(val), trim(str.substring(j)) ];
   },
 
   _element = function(s, ctx) {
-      var group = (/^\s*(\w+)(#[\d\w-]+)?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(&[\d\w\.-]+)?(?:\s+([^\s]+[^\0]*)?)?$/).exec(s);
-      //console.log(group);
+      var group = _element_regexp.exec(s),
+          element, ls, i, j, sub_expr;
+
       if (!group) { throw new Error('Incorrect element expression: '+ s); }
 
-      var element = document.createElement(group[1]);
+      element = document.createElement(group[1]);
+
       group[2] && (element.id = group[2].substring(1));
       group[3] && (element.className = group[3].substring(1).replace(/\./, ' '));
       group[5] && (element.name = group[5].substring(1));
       if (group[4]) {
-          var ls = group[4].substring(1).split(/:/);
-          for (var i = 0; i < ls.length; i++) {
+          ls = group[4].substring(1).split(/:/);
+          for (i = 0,j = ls.length; i<j; i++) {
               element.setAttribute.apply(element, _pesudo_map[ls[i]]);
           }
       }
       if (group[6]) {
-          var sub_expr = trim(group[6]);
+          sub_expr = trim(group[6]);
           if (sub_expr[0] === '>') {
               return [element, sub_expr];
           }
@@ -192,15 +227,18 @@ var
   },
 
   _set_text = function(str, element, ctx) {
-      var j = 0, quote = str[0], val;
+      var j = 0, quote = str[0], val, group;
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
           val = str.substring(3, j);
           j += 3;
       } else {
-          j = _find_end_quote(str, quote, 0);
-          val = _transfor(str.substring(0, j+1));
-          j++;
+          group = _parse_string(str);
+          val = group[0];
+          j = group[1];
+          //j = _find_end_quote(str, quote, 0);
+          //val = _transfor(str.substring(0, j+1));
+          //j++;
       }
       if ('input' === element.nodeName.toLowerCase()) {
           element.setAttribute('value', val);
@@ -210,13 +248,15 @@ var
       return str.substring(j);
   },
 
-  _set_ctx_text = function(s, element, ctx) {
-      if (s[0] !== '$') { throw new Error('Not a context variable format'); }
-      var i = 0, j, str = s, quote = s[0], name, val;
-      j = str.search(/\s|$/);
-      name = str.substring(1, j);
-      val = ctx[name];
+  _set_ctx_text = function(str, element, ctx) {
+
+      var quote = s[0],
+          j = str.search(/\s|$/),
+          name = str.substring(1, j),
+          val = ctx[name];
+
       if (val == null) { val = ''; }
+
       if ('input' === element.nodeName.toLowerCase()) {
           element.setAttribute('value', val.toString());
       } else {
@@ -247,30 +287,30 @@ var
   },
 
   // functions below are for markmore
-  _addjust_stack = function(indent, element_stack, indention_stack) {
-      var pop_num = 0, first_indent, last_indent, got = false, i;
-      if (indention_stack.length !== 0) {
-          last_indent = indention_stack[indention_stack.length -1];
-          if (last_indent === indent ) {
+  _addjust_stack = function(indent, es, is) {
+      var pop_num = 0, first, last, got = false, i;
+      if (is.length !== 0) {
+          last = is[is.length -1];
+          if (last === indent ) {
               pop_num = 1;
 
-          } else if (last_indent.length < indent.length) { // 
-              if (indent.indexOf(last_indent) !== 0) { // incorrent indention
+          } else if (last.length < indent.length) { // 
+              if (indent.indexOf(last) !== 0) { // incorrent indention
                   throw new Error('Incorret indention of line: '+ s);
               }
               pop_num = 0;
 
-          } else { //last_indent.length > indent.length
-              if (last_indent.indexOf(indent) !== 0) { // incorrent indention
+          } else { //last.length > indent.length
+              if (last.indexOf(indent) !== 0) { // incorrent indention
                   throw new Error('Incorret indention of line: '+ s);
               }
-              first_indent = indention_stack[0];
-              if (indent.indexOf(first_indent) !== 0) {
+              first = is[0];
+              if (indent.indexOf(first) !== 0) {
                   throw new Error('Incorret indention of line: '+ s);
               }
-              for (i = indention_stack.length -1; i >= 0; i--) {
-                  if (indent === indention_stack[i]) {
-                      pop_num = indention_stack.length - i;
+              for (i = is.length -1; i >= 0; i--) {
+                  if (indent === is[i]) {
+                      pop_num = is.length - i;
                       got = true;
                       break;
                   }
@@ -280,29 +320,29 @@ var
               }
           }
       }
-      for (; pop_num > 0; pop_num--) {
-          indention_stack.pop();
-          element_stack.pop();
+      while (pop_num -- > 0) {
+          is.pop();
+          es.pop();
       }
   },
 
-  _line_mode_1 = function(s, ctx, element_stack, indention_stack, mode) {
+  _line_mode_1 = function(s, ctx, es, is, mode) {
       var text_node = document.createTextNode(s + '\n');
-      element_stack[element_stack.length -1].appendChild(text_node);
+      es[es.length -1].appendChild(text_node);
       return mode;
   },
 
-  _line_mode_0 = function(s, ctx, element_stack, indention_stack, mode) {
+  _line_mode_0 = function(s, ctx, es, is, mode) {
       var indent = s.substring(0, s.search(/[^ \t]/)),
           element = _expression(s, ctx);
-      _addjust_stack(indent, element_stack, indention_stack);
-      element_stack[element_stack.length -1].appendChild(element);
-      element_stack.push(element);
-      indention_stack.push(indent);
+      _addjust_stack(indent, es, is);
+      es[es.length -1].appendChild(element);
+      es.push(element);
+      is.push(indent);
       return mode;
   },
 
-  _line = function(s, ctx, element_stack, indention_stack, mode) {
+  _line = function(s, ctx, es, is, mode) {
       var group;
       switch (mode) {
       case 0: // expression mode
@@ -314,14 +354,14 @@ var
               while(str[i -1] === '\\') { i = str.indexOf('"""', i +3); }
               
               if (i < 0) { // switch to mode 1
-                  _addjust_stack(indent, element_stack, indention_stack);
-                  return _line_mode_1(str, ctx, element_stack, indention_stack, 1);
+                  _addjust_stack(indent, es, is);
+                  return _line_mode_1(str, ctx, es, is, 1);
               } else if (trim(str.substring(i + 3)).length > 0) {
                   throw new Error('Unexpected content: '+ str.substring(3));
               }
-              return _line_mode_1(str.substring(0, i), ctx, element_stack, indention_stack, 0);
+              return _line_mode_1(str.substring(0, i), ctx, es, is, 0);
           } else
-              return _line_mode_0(s, ctx, element_stack, indention_stack, mode);
+              return _line_mode_0(s, ctx, es, is, mode);
       case 1: // text mode
           var i = s.indexOf('"""');
           while(s[i -1] === '\\') { i = s.indexOf('"""', i +3); }
@@ -329,11 +369,11 @@ var
               if (trim(s.substring(i + 3)).length > 0) {
                   throw new Error('Unexpected content: '+ s.substring(3));
               }
-              _line_mode_1(s.substring(0, i), ctx, element_stack, indention_stack, 0);
-              element_stack[element_stack.length -1].normalize();
+              _line_mode_1(s.substring(0, i), ctx, es, is, 0);
+              es[es.length -1].normalize();
               return 0;
           }
-          return _line_mode_1(s, ctx, element_stack, indention_stack, mode);
+          return _line_mode_1(s, ctx, es, is, mode);
       }
   },
 

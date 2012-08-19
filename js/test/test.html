@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-  <script language="javascript" src="http://code.jquery.com/jquery-1.8.0.js"></script>
+  <!--<script language="javascript" src="http://code.jquery.com/jquery-1.8.0.js"></script>-->
   <script language="javascript" src="../markless.js"></script>
   <script language="javascript">
   var test = function(s, pd, ctx) {
@@ -16,8 +16,20 @@
       }
   };
 
-  $(function () {
-      var lines = $("#testcases")[0].firstChild.textContent.split(/\n/),
+      window.test1 = function() {
+      console.log(markless.get_string('"abdfsdfasdf\\ts\\"sef"'));
+          var t0 = + new Date(), i;
+          for (i=0; i< 50000; i++) {
+              //new Function('return "abdfsdfasdf\\n\\"sef"');
+              //(function() {return "asdfjsdf\\snsd\td";})
+              //"asdlfasdfkjasw;aoeifjhwapoenffsdaljkfsadkfj".substring(i%9, i%9+18);
+              markless.get_string('"abdfsdfasdf\\ts\\"sef"');
+              //JSON.stringify('"abdfsdfHTML is urgly. Use markless.Yes.HTML is urgly. Use markless.Yes.HTML is urgly. Use markless.Yes.HTML is urgly. Use markless.Yes.asdf\\n\\"sef"');
+          };
+          console.log(+ new Date() - t0);
+      };
+  var load = function () {
+      var lines = document.getElementById("testcases").firstChild.textContent.split(/\n/),
           i, j, line;
       for (i = 0, j = lines.length; i<j; i++) {
           line = lines[i];
@@ -26,18 +38,12 @@
           }
       }
 
-      document.body.appendChild($("#template1")[0].firstChild.textContent.markmore());
+      document.body.appendChild(document.getElementById("template1").firstChild.textContent.markmore());
 
-      console.log(markless.get_string('"abdfsdfasdf\\n\\"sef"'));
-      var t0 = + new Date();
-      for (i=0; i< 5000; i++) {
-          //new Function('return "abdfsdfasdf\\n\\"sef"');
-          //(function() {return "asdfjsdf\\snsd\td";})
-          //"asdlfasdfkjasw;aoeifjhwapoenffsdaljkfsadkfj".substring(i%9, i%9+18);
-          markless.get_string('"abdfsdfasdf\\n\\"sef"');
-      };
-      console.log(+ new Date() - t0);
-  });
+
+  };
+  window.addEventListener('load', load);
+
   </script>
   <script type="text/x-markless" id="testcases">
 div#id2.short

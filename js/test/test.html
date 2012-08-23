@@ -15,18 +15,24 @@
           return e;
       }
   };
+  Function.prototype.tcall = function(obj) {
+      var args = Array.prototype.slice.call(arguments, 1),
+          t0 = + new Date();
+      this.apply(obj, args);
+      console.log(+ new Date() - t0);
+  };
 
-      window.test1 = function() {
-      console.log(markless.get_string('"abdfsdfasdf\\ts\\"sef"'));
-          var t0 = + new Date(), i;
+      window.test1 = function(s) {
+          s = s || '"abdfsdfasdf\\ts\\"sef"';
+          console.log(markless.get_string(s));
+          var i;
           for (i=0; i< 50000; i++) {
               //new Function('return "abdfsdfasdf\\n\\"sef"');
               //(function() {return "asdfjsdf\\snsd\td";})
               //"asdlfasdfkjasw;aoeifjhwapoenffsdaljkfsadkfj".substring(i%9, i%9+18);
-              markless.get_string('"abdfsdfasdf\\ts\\"sef"');
+              markless.get_string(s);
               //JSON.stringify('"abdfsdfHTML is urgly. Use markless.Yes.HTML is urgly. Use markless.Yes.HTML is urgly. Use markless.Yes.HTML is urgly. Use markless.Yes.asdf\\n\\"sef"');
           };
-          console.log(+ new Date() - t0);
       };
   var load = function () {
       var lines = document.getElementById("testcases").firstChild.textContent.split(/\n/),

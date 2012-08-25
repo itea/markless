@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<head>
+  <style type="text/css">
+#input { width: 100%; height: 500px;}
+  </style>
+  <script type="text/javascript" src="../js/markless.js"></script>
+  <script type="text/javascript">
+var onload = function() {
+
+  if (window.loaded) return;
+  window.loaded = true;
+
+  var win, doc;
+
+  var render = function() {
+    if (! win || win.closed) {
+      win = window.open('about:blank', null, 'height=500, width=500'),
+      doc = win.document;
+    }
+    var input = document.getElementById('input').value,
+        docFrag = input.markmore(doc);
+
+    /* remove head and body element */
+    doc.documentElement.removeChild(doc.documentElement.firstChild);
+    doc.documentElement.removeChild(doc.documentElement.firstChild);
+
+    doc.documentElement.appendChild(docFrag);
+  };
+
+  document.getElementById('render').addEventListener('click',render);
+};
+window.addEventListener('load', onload);
+  </script>
+</head>
+<body>
+<div>Write markless/markmore expressiones, click "Render", you got a html page according to the input.</div>
+<textarea id="input">head
+  title "Hello, world"
+  style type="text/css"
+    """ h1 {color: maroon;}
+        .green {color: green;}
+    """
+body
+  h1 "Markless"
+  div
+    ul
+      li &gt; a.green href="https://github.com/itea/markless" "visit Markless@github"
+</textarea>
+<br/>
+<button id="render">Render</button>
+</body>
+</html>

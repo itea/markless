@@ -43,12 +43,18 @@ var
   },
 
   _build_ctx = function(args) {
-      var ctx = {}, i, j, e;
-      for (i = 0, j = args.length; i<j; i++) {
+      var ctx = {}, i, len = args.length, e;
+
+      ctx._doc = window.document;
+
+      if (args[len -1] instanceof HTMLDocument) {
+          ctx._doc = args[len -1];
+          len --;
+      }
+      for (i = len; i >= 0; i--) {
           e = args[i];
           ctx[i] = e;
       }
-      ctx._doc = window.document;
       return ctx;
   },
 
@@ -161,7 +167,7 @@ var
 
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
-          val = str.substring(3, j);
+          val = str.substring(3, j).replace(/\\"""/, '"""');
           j += 3;
       } else {
           group = _parse_string(str);
@@ -203,7 +209,7 @@ var
 
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
-          val = str.substring(3, j);
+          val = str.substring(3, j).replace(/\\"""/, '"""');
           j += 3;
       } else {
           group = _parse_string(str);
@@ -361,7 +367,7 @@ var
   },
 
   _line_mode_1 = function(s, ctx, es, is, mode) {
-      var text_node = ctx._doc.createTextNode(s + '\n');
+      var text_node = ctx._doc.createTextNode(s.replace(/\\"""/, '"""') + '\n');
       es[es.length -1].appendChild(text_node);
       return mode;
   },
@@ -451,7 +457,10 @@ var
   }
 
   _markless.markmore = _markmore;
-  _markless.get_string = _parse_string;
+  _markless.debug = function() {
+      _markless._parse_string = _parse_string;
+  };
+
   window.markless = _markless;
 
 })(window);

@@ -189,11 +189,17 @@ var
 
           while ( (quote = str[ ++i ]) === ' ');
 
-          if (quote !== '"' && quote !== "'") { throw new Error('Invalid quote of string: '+ quote); }
+          if (quote === '$') {
+              j = str.search(/\s|$/, i);
+              val = ctx[ str.substring(i +1, j) ];
 
-          group = _parse_string(str, i);
-          val = group[0];
-          j = group[1];
+          } else {
+              if (quote !== '"' && quote !== "'") { throw new Error('Invalid quote of string: '+ quote); }
+
+              group = _parse_string(str, i);
+              val = group[0];
+              j = group[1];
+          }
 
           element.setAttribute(name, val);
 

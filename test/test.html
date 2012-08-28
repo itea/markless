@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <!--<script language="javascript" src="http://code.jquery.com/jquery-1.8.0.js"></script>-->
+  <script language="javascript" src="../js/markless.js"></script>
+  <script language="javascript">
+  var test = function(s, pd, ctx) {
+      console.log(s);
+      try {
+          var e = markless(s, pd, ctx);
+          console.log(e.outerHTML || e.textContent);
+          return e;
+      } catch (e) {
+          console.log(e.stack);
+          return e;
+      }
+  };
+  Function.prototype.tcall = function(obj) {
+      var args = Array.prototype.slice.call(arguments, 1),
+          t0 = + new Date();
+      this.apply(obj, args);
+      console.log(+ new Date() - t0);
+  };
+
+  window.test1 = function(s) {
+      s = s || '"abdfsdfasdf\\ts\\"sef"';
+      console.log(markless._parse_string(s));
+      var i;
+      for (i=0; i< 50000; i++) {
+          markless._parse_string(s);
+      };
+  };
+  var load = function () {
+      markless.debug();
+      var lines = document.getElementById("testcases").firstChild.textContent.split(/\n/),
+          i, j, line;
+      for (i = 0, j = lines.length; i<j; i++) {
+          line = lines[i];
+          if (line.search(/\w/) > -1) {
+              test(line);
+          }
+      }
+
+      document.body.appendChild(document.getElementById("template1").firstChild.textContent.markmore());
+
+
+  };
+  window.addEventListener('load', load);
+
+  </script>
+  <script type="text/x-markless" id="testcases">
+div#id2.short
+div#id2.short > p > "Nice to meet you!"
+div#id2.short > "hello, world"
+div  'hello, world'
+div  'hello, \'world'
+div  'hello, \\'ERROR'
+div  'hello, "world'
+div  "hello, 'workd"
+div  "hello, \"world"
+div  "hello, \\"ERROR"
+div  "hello, \"\"\"world"
+div ""
+div ''
+div """"""
+div ''''''
+div > 'hello, world'
+div>'hello, ERROR'
+div> 'hello, ERROR'
+div >'hello, world'
+div > 'hello, \'world'
+div > 'hello, \\'ERROR'
+div > 'hello, "world'
+div > "hello, 'workd"
+div > "hello, \"world"
+div > "hello, \\"ERROR"
+div > "hello, \"\"\"world"
+div """ hello """
+div """ this is \"""."""
+div """ this is """ERROR"""
+div > """ this is \"""."""
+div > """ this is """ERROR"""
+div class="abc"
+div class  =  "abc"   
+div class="ERROR\"
+div class="notERROR\""
+div class="notERROR\"abc"
+div class="ERROR\"abc
+div class=''
+div class=""
+div class='"'
+div class="'"
+div class='\''
+div class="\""
+div class="abc"style="padding:0px"
+div > span > "hello,\n world"
+div > p "hello, world" > span "hello"
+div > p class="ac" "hello, world" > span "hello"
+div > span class="show" style="background: yellow;" 
+div > span style="background: yellow;" > "hello"
+div > span style="background: yellow;" "hello"
+  </script>
+  <script type="text/x-markless" id="template1">
+# a line with leading # is a line comment
+    # try another
+
+div#hi
+  h1.maroon "hello, world"
+  p "HTML is urgly. Use markless."
+    strong """Yes."""
+    br
+    """This is a text block.
+    test \"""
+    and ""
+    and "
+    and '
+    """
+    input:date
+    br
+    "this is 2"
+div
+  h2 "test"
+  p "abcdefg" > strong "no"
+span "there"
+  </script>
+  </head>
+  <body>
+  </body>
+</html>
+

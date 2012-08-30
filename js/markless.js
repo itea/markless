@@ -1,5 +1,5 @@
 /* Markless
- * version 0.9
+ * version 0.9.1
  * itea 2012
  * https://github.com/itea/markless
  * MIT-LICENSE
@@ -42,6 +42,17 @@ var
       'checked':  ['checked', 'checked']
   },
 
+  _extend_pesudo = function(k, v1, v2) {
+      if (typeof k === 'string') {
+          _pesudo_map[k] = [ v1, v2 ];
+
+      } else if (typeof k === 'object') {
+          for (v1 in k) {
+              _pesudo_map[v1] = k[v1];
+          }
+      }
+  },
+
   _build_ctx = function(args) {
       var ctx = {}, i, len = args.length, e;
 
@@ -63,7 +74,7 @@ var
       do {
           j = str.indexOf(quote, j + l);
           if (j === -1) { throw new Error('Missing end quote: ' + str); }
-      } while (str[j -1] === '\\');
+      } while (str.charAt(j -1) === '\\');
       return j;
   },
 
@@ -72,7 +83,7 @@ var
       /** Borrowed some code from json_parse.js by crokford. */
       start = start || 0;
 
-      var ch = str[start], at = start + 1, quote = ch, at_quote = str.indexOf(quote, at),
+      var ch = str.charAt(start), at = start + 1, quote = ch, at_quote = str.indexOf(quote, at),
           hex, i, uffff, strings = [],
 
           next = function() {
@@ -145,7 +156,7 @@ var
   },
 
   _ctx_node = function(s, ctx) {
-      if (s[0] !== '$') { throw new Error('Not a context Node variable format'); }
+      if (s.charAt(0) !== '$') { throw new Error('Not a context Node variable format'); }
       var i = 0, j, str = s, name, val;
       j = str.search(/\s|$/);
       name = str.substring(1, j);
@@ -163,7 +174,7 @@ var
   },
 
   _text = function(str, ctx) {
-      var j = 0, quote = str[0], group, val;
+      var j = 0, quote = str.charAt(0), group, val;
 
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
@@ -178,16 +189,17 @@ var
   },
 
   _set_attrs = function(s, element, ctx) {
-      var i = 0, j, str = s, quote, name, val, group;
+      var i = 0, j, str = s, quote, name, val, group, ch;
       while (str.length > 0) {
-          if (str[0] === '>' || str[0] === '"' || str[0] === "'" || str[0] === '$') { return str; }
+          ch = str.charAt(0);
+          if (ch === '>' || ch === '"' || ch === "'" || ch === '$') { return str; }
 
           i = str.indexOf('=');
           if (i < 0) { throw new Error('Incorrect format of attribute: '+ str); }
           name = trim(str.substring(0, i));
           if (! /^[\w-]+$/.test(name)) { throw new Error('Incorrect name of attribute: '+ name); }
 
-          while ( (quote = str[ ++i ]) === ' ');
+          while ( (quote = str.charAt( ++i )) === ' ');
 
           if (quote === '$') {
               j = str.search(/\s|$/, i);
@@ -203,7 +215,7 @@ var
 
           element.setAttribute(name, val);
 
-          if (/^\S$/.test(str[j])) { throw new Error('Attributes should be separated by blankspace.'); }
+          if (/^\S$/.test(str.charAt(j))) { throw new Error('Attributes should be separated by blankspace.'); }
           str = trim(str.substring(j +1));
       }
       return "";
@@ -211,7 +223,7 @@ var
 
   _set_text = function(str, element, ctx) {
 
-      var j = 0, quote = str[0], val, group;
+      var j = 0, quote = str.charAt(0), val, group;
 
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
@@ -232,7 +244,7 @@ var
 
   _set_ctx_text = function(str, element, ctx) {
 
-      var quote = str[0],
+      var quote = str.charAt(0),
           j = str.search(/\s|$/),
           name = str.substring(1, j),
           val = ctx[name];
@@ -266,20 +278,20 @@ var
       }
       if (group[6]) {
           sub_expr = trim(group[6]);
-          ch0 = sub_expr[0];
+          ch0 = sub_expr.charAt(0);
           if (ch0 === '>') {
               return [element, sub_expr];
           }
           if (ch0 !== '"' && ch0 !== "'") { // attributes
               sub_expr = trim(_set_attrs(sub_expr, element, ctx));
-              ch0 = sub_expr[0];
+              ch0 = sub_expr.charAt(0);
           } 
           if (ch0 === '"' || ch0 === "'") { // text
               sub_expr = trim(_set_text(sub_expr, element, ctx));
-              ch0 = sub_expr[0];
+              ch0 = sub_expr.charAt(0);
           } else if (ch0 === '$') { // or ctx_text
               sub_expr = trim(_set_ctx_text(sub_expr, element, ctx));
-              ch0 = sub_expr[0];
+              ch0 = sub_expr.charAt(0);
           }
           if (sub_expr.length > 0) {
               if (ch0 === '>') {
@@ -300,12 +312,12 @@ var
 
   _expression = function(s, ctx) {
       s = s.replace(/^\s*/, '');
-      var rt, fn = _fn_idx[s[0]] || _element, e, subs;
+      var rt, fn = _fn_idx[s.charAt(0)] || _element, e, subs;
       rt = fn(s, ctx);
       e = rt[0];
       subs = rt[1];
       if (!! subs) {
-          if (subs[0] === '>') {
+          if (subs.charAt(0) === '>') {
               e.appendChild(_expression(subs.substring(1), ctx));
           } else {
               throw new Error('Unkown expression: '+ subs);
@@ -390,7 +402,7 @@ var
           var str = group[2],
               indent = group[1],
               i = str.indexOf('"""');
-          while(str[i -1] === '\\') { i = str.indexOf('"""', i +3); }
+          while(str.charAt(i -1) === '\\') { i = str.indexOf('"""', i +3); }
           
           if (i < 0) { // switch to mode 1
               _addjust_stack(indent, es, is);
@@ -407,7 +419,7 @@ var
 
   _line_fn_1 = function(s, ctx, es, is, mode) {
       var i = s.indexOf('"""');
-      while(s[i -1] === '\\') { i = s.indexOf('"""', i +3); }
+      while(s.charAt(i -1) === '\\') { i = s.indexOf('"""', i +3); }
 
       if (i > -1) { // switch back to mode 0
           if (trim(s.substring(i + 3)).length > 0) {
@@ -463,8 +475,11 @@ var
   }
 
   _markless.markmore = _markmore;
+  _markless.extendPesudo = _extend_pesudo;
+
   _markless.debug = function() {
       _markless._parse_string = _parse_string;
+      _markless._pesudo_map = _pesudo_map;
   };
 
   window.markless = _markless;

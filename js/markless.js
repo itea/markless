@@ -1,5 +1,5 @@
 /* Markless
- * version 0.9.1
+ * version 1.0
  * itea 2012
  * https://github.com/itea/markless
  * MIT-LICENSE
@@ -7,11 +7,114 @@
 (function(window) {
 
 var
-  r_element = /^\s*(\w+)(#[\d\w-]+)?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(&[\d\w\.-]+)?(?:\s+([^\s]+[^\0]*)?)?$/,
+  _extend = function(target, src) {
+      for (var e in src) {
+          target[e] = src[e];
+      }
+      return target;
+  },
 
+  _Node = function() {},
+
+  _Element = function(nodeName) {
+      this.nodeName = nodeName;
+      this._attrs = {};
+      this._children = [];
+  },
+
+  _TextNode = function(text) { this.nodeValue = text; },
+
+  _DocumentFragment = function() {
+      this._elements = [];
+  },
+
+  _document = {
+      createTextNode: function(text) {
+          return new _TextNode(text);
+      },
+
+      createElement: function(nodeName) {
+          return new _Element(nodeName);
+      },
+
+      createDocumentFragment: function() {
+          return new _DocumentFragment();
+      }
+  },
+  
+  _Context = function(doc, args) {
+      this._doc = doc;
+      this._args = args;
+  };
+
+  _extend(_Node.prototype, {});
+
+  _Element.prototype = _extend(new _Node(), {
+      nodeType: 1,
+
+      setAttribute: function(name, value) {
+          this._attrs[name] = value;
+      },
+
+      appendChild: function(node) {
+          this._children.push(node);
+      },
+
+      normalize: function() {
+      }
+  });
+
+  _TextNode.prototype = _extend(new _Node(), {
+      nodeType: 3
+  });
+
+  _DocumentFragment.prototype = _extend(new _Node(), {
+      nodeType: 11,
+
+      appendChild: function(node) {
+          this._elements.push(node);
+      }
+  });
+
+  _extend(_Context.prototype, {
+      createTextNode: function(text) {
+          return this._doc.createTextNode(text);
+      },
+
+      createElement: function(nodeName) {
+          return this._doc.createElement(nodeName);
+      },
+
+      createDocumentFragment: function() {
+          return this._doc.createDocumentFragment();
+      },
+
+      getCtxTextNode: function(name) {
+          var val = this._args[name];
+          if (val == null) { val = ''; }
+          return this.createTextNode(val.toString());
+      },
+
+      getCtxNode: function(name) {
+          var val = this._args[name];
+          if (val == null) {
+              return this.createTextNode('');
+          }
+
+          if (val.nodeType === 1 || val.nodeType === 3) {
+              return val;
+          }
+
+          return this.createTextNode(val.toString());
+      },
+
+      getCtxText: function(name) {
+          return this._args[name];
+      }
+  });
+
+var
   _trim_fn = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
-
-  trim = function(s) { return _trim_fn.call(s); },
 
   _pesudo_map = {
       'text':     ['type', 'text'],
@@ -54,19 +157,19 @@ var
   },
 
   _build_ctx = function(args) {
-      var ctx = {}, i, len = args.length, e;
+      var doc, vargs = {}, i, len = args.length, e;
 
-      ctx._doc = window.document;
+      doc = window.document;
 
-      if (args[len -1] instanceof HTMLDocument) {
-          ctx._doc = args[len -1];
+      if (args[len -1] instanceof HTMLDocument || args[len -1] === _document) {
+          doc = args[len -1];
           len --;
       }
       for (i = len; i >= 0; i--) {
           e = args[i];
-          ctx[i] = e;
+          vargs[i] = e;
       }
-      return ctx;
+      return new _Context(doc, vargs);
   },
 
   _find_end_quote = function(str, quote, start) {
@@ -160,17 +263,9 @@ var
       var i = 0, j, str = s, name, val;
       j = str.search(/\s|$/);
       name = str.substring(1, j);
-      val = ctx[name];
+      node = ctx.getCtxNode(name);
 
-      if (val == null) {
-          return [ ctx._doc.createTextNode(''), trim(str.substring(j)) ];
-      }
-      
-      if (val instanceof HTMLElement) {
-          return [ val, trim(str.substring(j)) ];
-      }
-
-      return [ ctx._doc.createTextNode(val.toString()), trim(str.substring(j)) ];
+      return [ node, _trim_fn.call(str.substring(j)) ];
   },
 
   _text = function(str, ctx) {
@@ -185,7 +280,7 @@ var
           val = group[0];
           j = group[1];
       }
-      return [ ctx._doc.createTextNode(val), trim(str.substring(j)) ];
+      return [ ctx.createTextNode(val), _trim_fn.call(str.substring(j)) ];
   },
 
   _set_attrs = function(s, element, ctx) {
@@ -196,14 +291,14 @@ var
 
           i = str.indexOf('=');
           if (i < 0) { throw new Error('Incorrect format of attribute: '+ str); }
-          name = trim(str.substring(0, i));
+          name = _trim_fn.call(str.substring(0, i));
           if (! /^[\w-]+$/.test(name)) { throw new Error('Incorrect name of attribute: '+ name); }
 
           while ( (quote = str.charAt( ++i )) === ' ');
 
           if (quote === '$') {
               j = str.search(/\s|$/, i);
-              val = ctx[ str.substring(i +1, j) ];
+              val = ctx.getCtxText( str.substring(i +1, j) );
 
           } else {
               if (quote !== '"' && quote !== "'") { throw new Error('Invalid quote of string: '+ quote); }
@@ -216,7 +311,7 @@ var
           element.setAttribute(name, val);
 
           if (/^\S$/.test(str.charAt(j))) { throw new Error('Attributes should be separated by blankspace.'); }
-          str = trim(str.substring(j +1));
+          str = _trim_fn.call(str.substring(j +1));
       }
       return "";
   },
@@ -237,7 +332,7 @@ var
       if ('INPUT' === element.nodeName) {
           element.setAttribute('value', val);
       } else {
-          element.appendChild(ctx._doc.createTextNode(val));
+          element.appendChild(ctx.createTextNode(val));
       }
       return str.substring(j);
   },
@@ -247,17 +342,19 @@ var
       var quote = str.charAt(0),
           j = str.search(/\s|$/),
           name = str.substring(1, j),
-          val = ctx[name];
+          val = ctx.getCtxText(name);
 
       if (val == null) { val = ''; }
 
       if ('INPUT' === element.nodeName) {
           element.setAttribute('value', val.toString());
       } else {
-          element.appendChild(ctx._doc.createTextNode(val.toString()));
+          element.appendChild(ctx.createTextNode(val.toString()));
       }
       return str.substring(j);
   },
+
+  r_element = /^\s*(\w+)(#[\d\w-]+)?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(&[\d\w\.-]+)?(?:\s+([^\s]+[^\0]*)?)?$/,
 
   _element = function(s, ctx) {
       var group = r_element.exec(s),
@@ -265,11 +362,17 @@ var
 
       if (!group) { throw new Error('Incorrect element expression: '+ s); }
 
-      element = ctx._doc.createElement(group[1]);
+      element = ctx.createElement(group[1]);
 
-      group[2] && (element.id = group[2].substring(1));
-      group[3] && (element.className = group[3].substring(1).replace(/\./, ' '));
-      group[5] && (element.name = group[5].substring(1));
+      if (group[2]) {
+          element.setAttribute('id', group[2].substring(1));
+      }
+      if (group[3]) {
+          element.setAttribute('class', group[3].substring(1).replace(/\./, ' '));
+      }
+      if (group[5]) {
+          element.setAttribute('name', group[5].substring(1));
+      }
       if (group[4]) {
           ls = group[4].substring(1).split(/:/);
           for (i = 0,j = ls.length; i<j; i++) {
@@ -277,20 +380,20 @@ var
           }
       }
       if (group[6]) {
-          sub_expr = trim(group[6]);
+          sub_expr = _trim_fn.call(group[6]);
           ch0 = sub_expr.charAt(0);
           if (ch0 === '>') {
               return [element, sub_expr];
           }
           if (ch0 !== '"' && ch0 !== "'") { // attributes
-              sub_expr = trim(_set_attrs(sub_expr, element, ctx));
+              sub_expr = _trim_fn.call(_set_attrs(sub_expr, element, ctx));
               ch0 = sub_expr.charAt(0);
           } 
           if (ch0 === '"' || ch0 === "'") { // text
-              sub_expr = trim(_set_text(sub_expr, element, ctx));
+              sub_expr = _trim_fn.call(_set_text(sub_expr, element, ctx));
               ch0 = sub_expr.charAt(0);
           } else if (ch0 === '$') { // or ctx_text
-              sub_expr = trim(_set_ctx_text(sub_expr, element, ctx));
+              sub_expr = _trim_fn.call(_set_ctx_text(sub_expr, element, ctx));
               ch0 = sub_expr.charAt(0);
           }
           if (sub_expr.length > 0) {
@@ -385,7 +488,7 @@ var
   },
 
   _line_mode_1 = function(s, ctx, es, is, mode) {
-      var text_node = ctx._doc.createTextNode(s.replace(/\\"""/, '"""') + '\n');
+      var text_node = ctx.createTextNode(s.replace(/\\"""/, '"""') + '\n');
       es[es.length -1].appendChild(text_node);
       return mode;
   },
@@ -408,7 +511,7 @@ var
               _addjust_stack(indent, es, is);
               return _line_mode_1(str, ctx, es, is, 1);
 
-          } else if (trim(str.substring(i + 3)).length > 0) {
+          } else if (_trim_fn.call(str.substring(i + 3)).length > 0) {
               throw new Error('Unexpected content: '+ str.substring(3));
           }
 
@@ -422,7 +525,7 @@ var
       while(s.charAt(i -1) === '\\') { i = s.indexOf('"""', i +3); }
 
       if (i > -1) { // switch back to mode 0
-          if (trim(s.substring(i + 3)).length > 0) {
+          if (_trim_fn.call(s.substring(i + 3)).length > 0) {
               throw new Error('Unexpected content: '+ s.substring(3));
           }
           _line_mode_1(s.substring(0, i), ctx, es, is, 0);
@@ -437,7 +540,7 @@ var
   _markmore = function(str) {
       var ctx = _build_ctx(arguments),
           lines = str.split('\n'),
-          element_stack = [ fragment = ctx._doc.createDocumentFragment() ],
+          element_stack = [ fragment = ctx.createDocumentFragment() ],
           indention_stack = [],
           i, j, mode = 0;
       /* OK, What is mode?
@@ -480,6 +583,7 @@ var
   _markless.debug = function() {
       _markless._parse_string = _parse_string;
       _markless._pesudo_map = _pesudo_map;
+      _markless._document = _document;
   };
 
   window.markless = _markless;

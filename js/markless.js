@@ -7,7 +7,12 @@
 (function(window) {
 
 var
-  _extend = function(target, src) {
+
+  error = function(s) {
+      throw new Error(s);
+  },
+
+  extend = function(target, src) {
       for (var e in src) {
           target[e] = src[e];
       }
@@ -18,6 +23,7 @@ var
 
   _Element = function(nodeName) {
       this.nodeName = nodeName;
+      this._need_normalize = false;
       this._attrs = {};
       this._children = [];
   },
@@ -42,14 +48,59 @@ var
       }
   },
   
+  _CtxNode = function(vname) {
+      this.vname = vname;
+  },
+
+  _CtxTextNode = function(vname) {
+      this.vname = vname;
+  },
+
+  _CtxText = function(vname) {
+      this.vname = vname;
+  },
+
   _Context = function(doc, args) {
       this._doc = doc;
       this._args = args;
+
+      if (doc === _document) {
+          
+          this.getCtxNode = function(name) {
+              return new _CtxNode(name);
+          };
+
+          this.getCtxTextNode = function(name) {
+              return new _CtxTextNode(name);
+          };
+
+          this.getCtxText = function(name) {
+              return new _CtxText(name);
+          };
+      }
+  },
+  
+  _build_realize_ctx = function(args) {
+      if (args[0] instanceof _Context) {
+          return args[0];
+      }
+
+      var doc = window.document, vargs = {}, i, len = args.length, e;
+
+      if (args[len -1] instanceof HTMLDocument || args[len -1] === _document) {
+          doc = args[len -1];
+          len --;
+      }
+      for (i = len; i >= 0; i--) {
+          e = args[i];
+          vargs[i + 1] = e;
+      }
+      return new _Context(doc, vargs);
   };
 
-  _extend(_Node.prototype, {});
+  extend(_Node.prototype, {});
 
-  _Element.prototype = _extend(new _Node(), {
+  _Element.prototype = extend(new _Node(), {
       nodeType: 1,
 
       setAttribute: function(name, value) {
@@ -61,22 +112,87 @@ var
       },
 
       normalize: function() {
+          this._need_normalize = true;
+      },
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments),
+              e, i, j, element = ctx.createElement(this.nodeName),
+              children;
+
+          for (e in this._attrs) {
+              element.setAttribute(e, this._attrs[e]);
+          }
+
+          children = this._children;
+          for (i = 0, j = children.length; i < j; i++) {
+              element.appendChild(children[i].realize(ctx));
+          }
+
+          this._need_normalize && element.normalize();
+          
+          return element;
       }
   });
 
-  _TextNode.prototype = _extend(new _Node(), {
-      nodeType: 3
+  _TextNode.prototype = extend(new _Node(), {
+      nodeType: 3,
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments);
+          return ctx.createTextNode(this.nodeValue);
+      }
   });
 
-  _DocumentFragment.prototype = _extend(new _Node(), {
+  _DocumentFragment.prototype = extend(new _Node(), {
       nodeType: 11,
 
       appendChild: function(node) {
           this._elements.push(node);
+      },
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments),
+              e, i, j, element = ctx.createDocumentFragment(),
+              elements;
+
+          elements = this._elements;
+          for (i = 0, j = elements.length; i < j; i++) {
+              element.appendChild(elements[i].realize(ctx));
+          }
+
+          return element;
       }
   });
 
-  _extend(_Context.prototype, {
+  _CtxNode.prototype = extend(new _Node(), {
+      nodeType: 81,
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments);
+          return ctx.getCtxNode(this.vname);
+      }
+  });
+
+  _CtxTextNode.prototype = extend(new _Node(), {
+      nodeType: 82,
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments);
+          return ctx.getCtxTextNode(this.vname);
+      }
+  });
+
+  _CtxText.prototype = extend(new _Node(), {
+      nodeType: 83,
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments);
+          return ctx.getCtxText(this.vname);
+      }
+  });
+
+  extend(_Context.prototype, {
       createTextNode: function(text) {
           return this._doc.createTextNode(text);
       },
@@ -176,7 +292,7 @@ var
       var j = start || 0, l = quote.length;
       do {
           j = str.indexOf(quote, j + l);
-          if (j === -1) { throw new Error('Missing end quote: ' + str); }
+          if (j === -1) { error('Missing end quote: ' + str); }
       } while (str.charAt(j -1) === '\\');
       return j;
   },
@@ -187,7 +303,7 @@ var
       start = start || 0;
 
       var ch = str.charAt(start), at = start + 1, quote = ch, at_quote = str.indexOf(quote, at),
-          hex, i, uffff, strings = [],
+          hex, i, uffff, string = '',
 
           next = function() {
               return ch = str.charAt(at ++);
@@ -198,7 +314,7 @@ var
               if (at_quote < at) {
                   at_quote = str.indexOf(quote, at);
                   if (at_quote === -1) {
-                      throw new Error('expecting end quote: ' + str);
+                      error('expecting end quote: ' + str);
                   }
               }
               var at0 = at, m;
@@ -211,11 +327,11 @@ var
                   at = m;
 
                   if (at_quote === -1) {
-                      throw new Error('expecting end quote: ' + str);
+                      error('expecting end quote: ' + str);
                   }
               }
               if (at0 !== at) {
-                  strings.push(str.slice(at0, at));
+                  string += str.slice(at0, at);
               }
               return ch = str.charAt(at++);
           },
@@ -234,7 +350,7 @@ var
       
       while (find()) {
           if (ch === quote) {
-              return [ strings.join(''), at ];
+              return [ string, at ];
           }
           if (ch === '\\') {
               next();
@@ -247,19 +363,19 @@ var
                       }
                       uffff = uffff * 16 + hex;
                   }
-                  strings.push(String.fromCharCode(uffff));
+                  string += String.fromCharCode(uffff);
               } else if (typeof escapee[ch] === 'string') {
-                  strings.push(escapee[ch]);
+                  string += escapee[ch];
               } else {
                   break;
               }
           }
       }
-      throw new Error('Bad string: ' + str);
+      error('Bad string: ' + str);
   },
 
   _ctx_node = function(s, ctx) {
-      if (s.charAt(0) !== '$') { throw new Error('Not a context Node variable format'); }
+      if (s.charAt(0) !== '$') { error('Not a context Node variable format'); }
       var i = 0, j, str = s, name, val;
       j = str.search(/\s|$/);
       name = str.substring(1, j);
@@ -283,37 +399,39 @@ var
       return [ ctx.createTextNode(val), _trim_fn.call(str.substring(j)) ];
   },
 
-  _set_attrs = function(s, element, ctx) {
-      var i = 0, j, str = s, quote, name, val, group, ch;
-      while (str.length > 0) {
-          ch = str.charAt(0);
-          if (ch === '>' || ch === '"' || ch === "'" || ch === '$') { return str; }
+  regx_nonblank_pos = /(?=\S)/g,
 
-          i = str.indexOf('=');
-          if (i < 0) { throw new Error('Incorrect format of attribute: '+ str); }
-          name = _trim_fn.call(str.substring(0, i));
-          if (! /^[\w-]+$/.test(name)) { throw new Error('Incorrect name of attribute: '+ name); }
+  _nonblank = function(str, start) {
+      regx_nonblank_pos.lastIndex = start || 0;
+      if ( !regx_nonblank_pos.exec(str) ) { return str.length; }
+      return regx_nonblank_pos.lastIndex;
+  },
 
-          while ( (quote = str.charAt( ++i )) === ' ');
+  regx_attr = /([\w-]+)\s*=\s*(?:["']|(?:\$([\d\.\w]+)))/g,
 
-          if (quote === '$') {
-              j = str.search(/\s|$/, i);
-              val = ctx.getCtxText( str.substring(i +1, j) );
+  _set_attrs = function(str, element, ctx) {
+      var group, j = 0, name, val;
+      
+      while (true) {
+          regx_attr.lastIndex = j;
+          group = regx_attr.exec(str);
+          if (!group) { return j; }
 
+          name = group[1];
+
+          if (group[2]) {
+              val = ctx.getCtxText( group[2] );
+              j = regx_attr.lastIndex;
           } else {
-              if (quote !== '"' && quote !== "'") { throw new Error('Invalid quote of string: '+ quote); }
-
-              group = _parse_string(str, i);
+              group = _parse_string(str, regx_attr.lastIndex -1);
               val = group[0];
-              j = group[1];
+              j = regx_attr.lastIndex = group[1];
           }
 
           element.setAttribute(name, val);
 
-          if (/^\S$/.test(str.charAt(j))) { throw new Error('Attributes should be separated by blankspace.'); }
-          str = _trim_fn.call(str.substring(j +1));
+          j = _nonblank(str, j);
       }
-      return "";
   },
 
   _set_text = function(str, element, ctx) {
@@ -322,60 +440,50 @@ var
 
       if (str.substring(0, 3) === '"""') {
           j = _find_end_quote(str, '"""', 0);
-          val = str.substring(3, j).replace(/\\"""/, '"""');
+          val = str.substring(3, j).replace('\\"""', '"""');
           j += 3;
       } else {
           group = _parse_string(str);
           val = group[0];
           j = group[1];
       }
-      if ('INPUT' === element.nodeName) {
-          element.setAttribute('value', val);
-      } else {
-          element.appendChild(ctx.createTextNode(val));
-      }
-      return str.substring(j);
+
+      element.appendChild(ctx.createTextNode(val));
+      return _nonblank(str, j);
   },
 
   _set_ctx_text = function(str, element, ctx) {
 
       var quote = str.charAt(0),
           j = str.search(/\s|$/),
-          name = str.substring(1, j),
-          val = ctx.getCtxText(name);
+          name = str.substring(1, j);
 
-      if (val == null) { val = ''; }
-
-      if ('INPUT' === element.nodeName) {
-          element.setAttribute('value', val.toString());
-      } else {
-          element.appendChild(ctx.createTextNode(val.toString()));
-      }
-      return str.substring(j);
+      element.appendChild(ctx.getCtxTextNode(name));
+      return _nonblank(str, j);
   },
 
-  r_element = /^\s*(\w+)(#[\d\w-]+)?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(&[\d\w\.-]+)?(?:\s+([^\s]+[^\0]*)?)?$/,
+  regx_element = /^\s*(\w+)(?:#([\d\w-]+))?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(?:&([\d\w\.-]+))?(?:\s+([^\s]+[^\0]*)?)?$/,
 
   _element = function(s, ctx) {
-      var group = r_element.exec(s),
+      var group = regx_element.exec(s),
           element, ls, i, j, sub_expr, ch0;
 
-      if (!group) { throw new Error('Incorrect element expression: '+ s); }
+      if (!group) { error('Incorrect element expression: '+ s); }
 
       element = ctx.createElement(group[1]);
 
       if (group[2]) {
-          element.setAttribute('id', group[2].substring(1));
+          element.setAttribute('id', group[2]);
       }
       if (group[3]) {
           element.setAttribute('class', group[3].substring(1).replace(/\./, ' '));
       }
       if (group[5]) {
-          element.setAttribute('name', group[5].substring(1));
+          element.setAttribute('name', group[5]);
       }
       if (group[4]) {
-          ls = group[4].substring(1).split(/:/);
-          for (i = 0,j = ls.length; i<j; i++) {
+          ls = group[4].split(/:/);
+          for (i = 1,j = ls.length; i<j; i++) {
               element.setAttribute.apply(element, _pesudo_map[ls[i]]);
           }
       }
@@ -386,21 +494,21 @@ var
               return [element, sub_expr];
           }
           if (ch0 !== '"' && ch0 !== "'") { // attributes
-              sub_expr = _trim_fn.call(_set_attrs(sub_expr, element, ctx));
+              sub_expr = sub_expr.substring( _set_attrs(sub_expr, element, ctx) );
               ch0 = sub_expr.charAt(0);
           } 
           if (ch0 === '"' || ch0 === "'") { // text
-              sub_expr = _trim_fn.call(_set_text(sub_expr, element, ctx));
+              sub_expr = sub_expr.substring(_set_text(sub_expr, element, ctx));
               ch0 = sub_expr.charAt(0);
           } else if (ch0 === '$') { // or ctx_text
-              sub_expr = _trim_fn.call(_set_ctx_text(sub_expr, element, ctx));
+              sub_expr = sub_expr.substring(_set_ctx_text(sub_expr, element, ctx));
               ch0 = sub_expr.charAt(0);
           }
           if (sub_expr.length > 0) {
               if (ch0 === '>') {
                   return [element, sub_expr];
               } else {
-                  throw new Error('Unkown expression: '+ sub_expr);
+                  error('Unkown expression: '+ sub_expr);
               }
            }
       }
@@ -417,16 +525,16 @@ var
       s = s.replace(/^\s*/, '');
       var rt, fn = _fn_idx[s.charAt(0)] || _element, e, subs;
       rt = fn(s, ctx);
-      e = rt[0];
+      element = rt[0];
       subs = rt[1];
       if (!! subs) {
           if (subs.charAt(0) === '>') {
-              e.appendChild(_expression(subs.substring(1), ctx));
+              element.appendChild(_expression(subs.substring(1), ctx));
           } else {
-              throw new Error('Unkown expression: '+ subs);
+              error('Unkown expression: '+ subs);
           }
       }
-      return e;
+      return element;
   },
 
   _markless = function(s) {
@@ -447,13 +555,13 @@ var
 
           } else if (last.length < indent.length) { // 
               if (indent.indexOf(last) !== 0) { // incorrent indention
-                  throw new Error('Incorret indention of line: '+ s);
+                  error('Incorret indention of line: '+ s);
               }
               pop_num = 0;
 
           } else { //last.length > indent.length
               if (last.indexOf(indent) !== 0) { // incorrent indention
-                  throw new Error('Incorret indention of line: '+ s);
+                  error('Incorret indention of line: '+ s);
               }
               for (i = is.length -1; i >= 0; i--) {
                   if (indent === is[i]) {
@@ -463,7 +571,7 @@ var
                   }
               }
               if (! got) {
-                  throw new Error('Incorret indention of line: '+ s);
+                  error('Incorret indention of line: '+ s);
               }
           }
       }
@@ -512,7 +620,7 @@ var
               return _line_mode_1(str, ctx, es, is, 1);
 
           } else if (_trim_fn.call(str.substring(i + 3)).length > 0) {
-              throw new Error('Unexpected content: '+ str.substring(3));
+              error('Unexpected content: '+ str.substring(3));
           }
 
           return _line_mode_1(str.substring(0, i), ctx, es, is, 0);
@@ -526,7 +634,7 @@ var
 
       if (i > -1) { // switch back to mode 0
           if (_trim_fn.call(s.substring(i + 3)).length > 0) {
-              throw new Error('Unexpected content: '+ s.substring(3));
+              error('Unexpected content: '+ s.substring(3));
           }
           _line_mode_1(s.substring(0, i), ctx, es, is, 0);
           es[es.length -1].normalize();
@@ -584,6 +692,8 @@ var
       _markless._parse_string = _parse_string;
       _markless._pesudo_map = _pesudo_map;
       _markless._document = _document;
+      _markless._Context = _Context;
+      _markless._set_attrs = _set_attrs;
   };
 
   window.markless = _markless;

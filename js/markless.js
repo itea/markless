@@ -7,6 +7,7 @@
 (function(window) {
 
 var
+  trim_fn = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
 
   error = function(s) {
       throw new Error(s);
@@ -17,8 +18,9 @@ var
           target[e] = src[e];
       }
       return target;
-  },
+  };
 
+var
   _Node = function() {},
 
   _Element = function(nodeName) {
@@ -60,6 +62,11 @@ var
       this.vname = vname;
   },
 
+  _Command = function(name) {
+      this.name = name;
+      this.args = [];
+  },
+
   _Context = function(doc, args) {
       this._doc = doc;
       this._args = args;
@@ -76,6 +83,10 @@ var
 
           this.getCtxText = function(name) {
               return new _CtxText(name);
+          };
+
+          this.createCommand = function(name) {
+              return new _Command(name);
           };
       }
   },
@@ -192,6 +203,19 @@ var
       }
   });
 
+  _Command.prototype = extend(new _Node(), {
+      nodeType: 84,
+
+      realize: function(ctx) {
+          var ctx = _build_realize_ctx(arguments);
+          return ctx.getCtxText(this.vname);
+      },
+
+      setArguments: function(args) {
+          this.args = args.slice();
+      }
+  });
+
   extend(_Context.prototype, {
       createTextNode: function(text) {
           return this._doc.createTextNode(text);
@@ -230,8 +254,6 @@ var
   });
 
 var
-  _trim_fn = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
-
   _pesudo_map = {
       'text':     ['type', 'text'],
       'password': ['type', 'password'],
@@ -375,13 +397,12 @@ var
   },
 
   _ctx_node = function(s, ctx) {
-      if (s.charAt(0) !== '$') { error('Not a context Node variable format'); }
       var i = 0, j, str = s, name, val;
       j = str.search(/\s|$/);
       name = str.substring(1, j);
       node = ctx.getCtxNode(name);
 
-      return [ node, _trim_fn.call(str.substring(j)) ];
+      return [ node, trim_fn.call(str.substring(j)) ];
   },
 
   _text = function(str, ctx) {
@@ -396,7 +417,7 @@ var
           val = group[0];
           j = group[1];
       }
-      return [ ctx.createTextNode(val), _trim_fn.call(str.substring(j)) ];
+      return [ ctx.createTextNode(val), trim_fn.call(str.substring(j)) ];
   },
 
   regx_nonblank_pos = /(?=\S)/g,
@@ -405,6 +426,52 @@ var
       regx_nonblank_pos.lastIndex = start || 0;
       if ( !regx_nonblank_pos.exec(str) ) { return str.length; }
       return regx_nonblank_pos.lastIndex;
+  },
+
+  regx_command = /\s*!([\w-]+)/,
+
+  regx_cmdarg = /["']|\$?([\w\.-]+)/g,
+
+  _command = function(str, ctx) {
+      var group = regx_command.exec(str), i, args = [], ch, cmd, arg, grp;
+
+      if ( !group ) { error('Invalid command name: ' + str); }
+
+      cmd = ctx.createCommand( group[1] );
+
+      i = group[0].length;
+      while (true) {
+          i = _nonblank(str, i);
+          if ( i === str.length ) break;
+
+          regx_cmdarg.lastIndex = i;
+          group = regx_cmdarg.exec(str);
+
+          if ( !group || group.index !== i ) { error('Inproper argument: ' + str.substring(i)); }
+
+          switch ( str.charAt(i) ) {
+          case '$':
+              args.push( str.substring(i, regx_cmdarg.lastIndex) );
+              break;
+
+          case '"':
+          case "'":
+              grp = _parse_string(str, i);
+              args.push( '"' + grp[0] );
+              regx_cmdarg.lastIndex = grp[1];
+              break;
+
+          default:
+              // it's a symbol
+              args.push( ':' + group[1] );
+          }
+
+          i = regx_cmdarg.lastIndex;
+      }
+
+      cmd.setArguments(args);
+
+      return [ cmd, null ];
   },
 
   regx_attr = /([\w-]+)\s*=\s*(?:["']|(?:\$([\d\.\w]+)))/g,
@@ -416,6 +483,7 @@ var
           regx_attr.lastIndex = j;
           group = regx_attr.exec(str);
           if (!group) { return j; }
+          if ( group.index !== j ) { error('Inproper attribute list: ' + str); }
 
           name = group[1];
 
@@ -488,7 +556,7 @@ var
           }
       }
       if (group[6]) {
-          sub_expr = _trim_fn.call(group[6]);
+          sub_expr = trim_fn.call(group[6]);
           ch0 = sub_expr.charAt(0);
           if (ch0 === '>') {
               return [element, sub_expr];
@@ -516,6 +584,7 @@ var
   },
 
   _fn_idx = {
+      '!': _command,
       '$': _ctx_node,
       '"': _text,
       "'": _text
@@ -540,9 +609,9 @@ var
   _markless = function(s) {
       var ctx = _build_ctx(arguments);
       return _expression(s, ctx);
-  },
+  };
 
-  // functions below are for markmore
+var
   _addjust_stack = function(indent, es, is) {
 
       var pop_num = 0, last, got = false, i;
@@ -619,7 +688,7 @@ var
               _addjust_stack(indent, es, is);
               return _line_mode_1(str, ctx, es, is, 1);
 
-          } else if (_trim_fn.call(str.substring(i + 3)).length > 0) {
+          } else if (trim_fn.call(str.substring(i + 3)).length > 0) {
               error('Unexpected content: '+ str.substring(3));
           }
 
@@ -633,7 +702,7 @@ var
       while(s.charAt(i -1) === '\\') { i = s.indexOf('"""', i +3); }
 
       if (i > -1) { // switch back to mode 0
-          if (_trim_fn.call(s.substring(i + 3)).length > 0) {
+          if (trim_fn.call(s.substring(i + 3)).length > 0) {
               error('Unexpected content: '+ s.substring(3));
           }
           _line_mode_1(s.substring(0, i), ctx, es, is, 0);

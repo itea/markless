@@ -41,7 +41,8 @@
           }
       }
 
-      document.body.appendChild(document.getElementById("template1").firstChild.textContent.markmore());
+      var tpls = markless.templates(document.getElementById("template1").firstChild.textContent);
+      document.body.appendChild( tpls["show"].realize() );
 
 
   };
@@ -104,6 +105,7 @@ div > span style="background: yellow;" "hello"
 # a line with leading # is a line comment
     # try another
 
+!template "show"
 div#hi
   h1.maroon "hello, world"
   p "HTML is urgly. Use markless."

@@ -2,5 +2,5 @@
 
 cd src
 
-cat intro.js basic.js command.js dom-context.js markless.js markmore.js outro.js > ../js/markless.js
+cat intro.js basic.js dom-context.js command.js markless.js misc.js outro.js > ../js/markless.js
 

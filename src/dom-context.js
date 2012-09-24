@@ -48,10 +48,10 @@ var
       this.childNodes = [];
   },
 
-  Context = function(doc, params, super_ctx) {
-      this._doc = doc;
-      this._params = params || {};
-      this._super_ctx = super_ctx;
+  Context = function(doc, superCtx, params) {
+      this.doc = doc;
+      this.attrs = params || {};
+      this.superCtx = superCtx;
 
       if (doc === _document) {
           
@@ -73,7 +73,29 @@ var
       }
   },
 
-  _bulid_context = function(doc, superCtx) {
+  _build_context = function(doc, superCtx) {
+      var i = 0, j = arguments.length, arg = arguments[0], attrs = {};
+
+      if ( arg instanceof HTMLDocument || arg === _document ) {
+          i++;
+      } else {
+          doc = _document;
+      }
+
+      arg = arguments[i];
+      if ( arg instanceof Context ) {
+          superCtx = arg;
+          i++;
+      } else {
+          superCtx = undefined;
+      }
+
+      for (; i < j; i++) {
+          arg = arguments[i];
+          extend(attrs, arg);
+      }
+
+      return new Context(doc, superCtx, attrs);
   },
   
   _build_realize_ctx = function(args) {
@@ -91,6 +113,7 @@ var
           e = args[i];
           vargs[i + 1] = e;
       }
+
       return new Context(doc, vargs);
   },
   
@@ -146,7 +169,16 @@ var
   _DocumentFragment.prototype = extend(new _Node(), {
       nodeType: 11,
 
-      appendChild: _appendChild,
+      appendChild: function(node) {
+          if ( node instanceof _DocumentFragment ) {
+              var i = 0, j = node.childNodes.length;
+              for (; i < j; i++) {
+                  this.childNodes.push(node.childNodes[i]);
+              }
+          } else {
+              this.childNodes.push(node);
+          }
+      },
 
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments),
@@ -196,10 +228,10 @@ var
 
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments),
-              cmd = _get_command_fn(this.name),
+              cmdfn = _get_command_fn(this.name),
               vfn;
 
-          vfn = cmd.call(this, this._args.slice(), ctx);
+          vfn = cmdfn.call(this, this._args.slice(), ctx);
           return vfn;
       },
 
@@ -214,25 +246,25 @@ var
 
   extend(Context.prototype, {
       createTextNode: function(text) {
-          return this._doc.createTextNode(text);
+          return this.doc.createTextNode(text);
       },
 
       createElement: function(nodeName) {
-          return this._doc.createElement(nodeName);
+          return this.doc.createElement(nodeName);
       },
 
       createDocumentFragment: function() {
-          return this._doc.createDocumentFragment();
+          return this.doc.createDocumentFragment();
       },
 
       getCtxTextNode: function(name) {
-          var val = this._getParam(name);
+          var val = this.getAttr(name);
           if (val == null) { val = ''; }
           return this.createTextNode(val.toString());
       },
 
       getCtxNode: function(name) {
-          var val = this._getParam(name);;
+          var val = this.getAttr(name);;
           if (val == null) {
               return this.createTextNode('');
           }
@@ -245,23 +277,31 @@ var
       },
 
       getCtxContent: function(name) {
-          return this._getParam(name);
+          return this.getAttr(name);
       },
 
-      _getParam: function(name) {
-          var param = this._params[name];
-          if (param === undefined && this._super_ctx) {
-              param = this._super_ctx._getParam(name);
+      getAttribute: function(name) {
+          return this.attrs[name];
+      },
+
+      setAttribute: function(name, value) {
+          this.attrs[name] = value;
+      },
+
+      removeAttribute: function(name, value) {
+          delete this.attrs[name];
+      },
+
+      getAttr: function(name) {
+          var param = this.attrs[name];
+          if (param === undefined && this.superCtx) {
+              param = this.superCtx.getAttr(name);
           }
           return param;
       },
 
       getSymbol: function(name) {
           return new Symbol(name);
-      },
-
-      newSubContext: function(params) {
-          return new Context(this._doc, params, this);
       },
 
       toString: function() {

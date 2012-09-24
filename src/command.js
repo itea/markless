@@ -66,7 +66,7 @@ var
       for ( e in iter) {
           c = {};
           c[symbol.name] = iter[e];
-          newCtx = ctx.newSubContext(c);
+          newCtx = _build_context(ctx, c);
 
           for (i = 0, j = this.childNodes.length; i < j; i++) {
               f = this.childNodes[i];
@@ -75,19 +75,6 @@ var
       }
 
       return docFrag;
-  },
-
-  'template': function(args, ctx) {
-      if ( ! _asset_args('s', args) ) error('Need a string argument: ' + args);
-
-      var i, j, e, docFrag = ctx.createDocumentFragment();
-
-      for (i = 0, j = this.childNodes.length; i < j; i++) {
-          e = this.childNodes[i];
-          docFrag.appendChild(e);
-      }
-
-      return [ args[0], docFrag ];
   }
 
   });

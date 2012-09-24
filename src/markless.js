@@ -352,7 +352,10 @@ var
 
         var pop_num = 0, last, got = false, i;
 
-        if (is.length !== 0) {
+        if (indent === 0) {
+            pop_num = is.length;
+
+        } else if (is.length !== 0) {
             last = is[is.length -1];
 
             if (last === indent ) {
@@ -468,13 +471,17 @@ var
         }
 
         return element_stack[0].childNodes.length === 1 ?
-            element_stack[0].firstChild : element_stack[0];
+            element_stack[0].childNodes[0] : element_stack[0];
     };
 
     return _more_expression;
   })(_expression),
 
   _build_ctx = function(args) {
+      if (args[1] instanceof Context) {
+          return args[1];
+      }
+
       var doc, vargs = {}, i, len = args.length, e;
 
       doc = window.document;
@@ -490,13 +497,13 @@ var
       return new Context(doc, vargs);
   },
 
-  _markless = function(str) {
-      var ctx = _build_ctx(arguments);
+  _markless = function(str, ctx) {
+      ctx = _build_ctx(arguments);
       return (str.indexOf("\n") > -1 ? _more_expression : _expression)(str, ctx);
   },
 
-  _markmore = function(str) {
-      var ctx = new Context(_document);
+  _markmore = function(str, ctx) {
+      ctx = ctx || _build_context(_document);
       return (str.indexOf("\n") > -1 ? _more_expression : _expression)(str, ctx);
   };
 

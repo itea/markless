@@ -70,10 +70,10 @@ var
       this.childNodes = [];
   },
 
-  Context = function(doc, params, super_ctx) {
-      this._doc = doc;
-      this._params = params || {};
-      this._super_ctx = super_ctx;
+  Context = function(doc, superCtx, params) {
+      this.doc = doc;
+      this.attrs = params || {};
+      this.superCtx = superCtx;
 
       if (doc === _document) {
           
@@ -94,6 +94,31 @@ var
           };
       }
   },
+
+  _build_context = function(doc, superCtx) {
+      var i = 0, j = arguments.length, arg = arguments[0], attrs = {};
+
+      if ( arg instanceof HTMLDocument || arg === _document ) {
+          i++;
+      } else {
+          doc = _document;
+      }
+
+      arg = arguments[i];
+      if ( arg instanceof Context ) {
+          superCtx = arg;
+          i++;
+      } else {
+          superCtx = undefined;
+      }
+
+      for (; i < j; i++) {
+          arg = arguments[i];
+          extend(attrs, arg);
+      }
+
+      return new Context(doc, superCtx, attrs);
+  },
   
   _build_realize_ctx = function(args) {
       if (args[0] instanceof Context) {
@@ -110,6 +135,7 @@ var
           e = args[i];
           vargs[i + 1] = e;
       }
+
       return new Context(doc, vargs);
   },
   
@@ -165,7 +191,16 @@ var
   _DocumentFragment.prototype = extend(new _Node(), {
       nodeType: 11,
 
-      appendChild: _appendChild,
+      appendChild: function(node) {
+          if ( node instanceof _DocumentFragment ) {
+              var i = 0, j = node.childNodes.length;
+              for (; i < j; i++) {
+                  this.childNodes.push(node.childNodes[i]);
+              }
+          } else {
+              this.childNodes.push(node);
+          }
+      },
 
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments),
@@ -215,10 +250,10 @@ var
 
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments),
-              cmd = _get_command_fn(this.name),
+              cmdfn = _get_command_fn(this.name),
               vfn;
 
-          vfn = cmd.call(this, this._args.slice(), ctx);
+          vfn = cmdfn.call(this, this._args.slice(), ctx);
           return vfn;
       },
 
@@ -233,25 +268,25 @@ var
 
   extend(Context.prototype, {
       createTextNode: function(text) {
-          return this._doc.createTextNode(text);
+          return this.doc.createTextNode(text);
       },
 
       createElement: function(nodeName) {
-          return this._doc.createElement(nodeName);
+          return this.doc.createElement(nodeName);
       },
 
       createDocumentFragment: function() {
-          return this._doc.createDocumentFragment();
+          return this.doc.createDocumentFragment();
       },
 
       getCtxTextNode: function(name) {
-          var val = this._getParam(name);
+          var val = this.getAttr(name);
           if (val == null) { val = ''; }
           return this.createTextNode(val.toString());
       },
 
       getCtxNode: function(name) {
-          var val = this._getParam(name);;
+          var val = this.getAttr(name);;
           if (val == null) {
               return this.createTextNode('');
           }
@@ -264,23 +299,31 @@ var
       },
 
       getCtxContent: function(name) {
-          return this._getParam(name);
+          return this.getAttr(name);
       },
 
-      _getParam: function(name) {
-          var param = this._params[name];
-          if (param === undefined && this._super_ctx) {
-              param = this._super_ctx._getParam(name);
+      getAttribute: function(name) {
+          return this.attrs[name];
+      },
+
+      setAttribute: function(name, value) {
+          this.attrs[name] = value;
+      },
+
+      removeAttribute: function(name, value) {
+          delete this.attrs[name];
+      },
+
+      getAttr: function(name) {
+          var param = this.attrs[name];
+          if (param === undefined && this.superCtx) {
+              param = this.superCtx.getAttr(name);
           }
           return param;
       },
 
       getSymbol: function(name) {
           return new Symbol(name);
-      },
-
-      newSubContext: function(params) {
-          return new Context(this._doc, params, this);
       },
 
       toString: function() {
@@ -357,7 +400,7 @@ var
       for ( e in iter) {
           c = {};
           c[symbol.name] = iter[e];
-          newCtx = ctx.newSubContext(c);
+          newCtx = _build_context(ctx, c);
 
           for (i = 0, j = this.childNodes.length; i < j; i++) {
               f = this.childNodes[i];
@@ -366,19 +409,6 @@ var
       }
 
       return docFrag;
-  },
-
-  'template': function(args, ctx) {
-      if ( ! _asset_args('s', args) ) error('Need a string argument: ' + args);
-
-      var i, j, e, docFrag = ctx.createDocumentFragment();
-
-      for (i = 0, j = this.childNodes.length; i < j; i++) {
-          e = this.childNodes[i];
-          docFrag.appendChild(e);
-      }
-
-      return [ args[0], docFrag ];
   }
 
   });
@@ -736,7 +766,10 @@ var
 
         var pop_num = 0, last, got = false, i;
 
-        if (is.length !== 0) {
+        if (indent === 0) {
+            pop_num = is.length;
+
+        } else if (is.length !== 0) {
             last = is[is.length -1];
 
             if (last === indent ) {
@@ -852,13 +885,17 @@ var
         }
 
         return element_stack[0].childNodes.length === 1 ?
-            element_stack[0].firstChild : element_stack[0];
+            element_stack[0].childNodes[0] : element_stack[0];
     };
 
     return _more_expression;
   })(_expression),
 
   _build_ctx = function(args) {
+      if (args[1] instanceof Context) {
+          return args[1];
+      }
+
       var doc, vargs = {}, i, len = args.length, e;
 
       doc = window.document;
@@ -874,35 +911,14 @@ var
       return new Context(doc, vargs);
   },
 
-  _markless = function(str) {
-      var ctx = _build_ctx(arguments);
+  _markless = function(str, ctx) {
+      ctx = _build_ctx(arguments);
       return (str.indexOf("\n") > -1 ? _more_expression : _expression)(str, ctx);
   },
 
-  _markmore = function(str) {
-      var ctx = new Context(_document);
+  _markmore = function(str, ctx) {
+      ctx = ctx || _build_context(_document);
       return (str.indexOf("\n") > -1 ? _more_expression : _expression)(str, ctx);
-  };
-
-var
-  _templates = function(str) {
-      var docFrag = _markmore(str), map = {},
-          i, j, e, name, tp;
-
-      for (i = 0, j = docFrag.childNodes.length; i < j; i++) {
-          e = docFrag.childNodes[i];
-
-          if ( e instanceof CtxCommand ) {
-              name = e._args[0];
-              tp = e.realize(_document)[1];
-              map[name] = tp;
-
-          } else if ( e instanceof _Node ) {
-              if (tp) { tp.appendChild(e); }
-          }
-      }
-
-      return map;
   };
 
   if (true) {
@@ -926,8 +942,8 @@ var
   }
 
   _markless.markmore = _markmore;
-  _markless.templates = _templates;
   _markless.extendPesudo = _extend_pesudo;
+  _markless.buildContext = _build_context;
 
   _markless.debug = function() {
       _markless._pesudo_map = _pesudo_map;

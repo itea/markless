@@ -1,11 +1,3 @@
-/* Markless
- * version 1.0
- * itea 2012
- * https://github.com/itea/markless
- * MIT-LICENSE
- */
-(function(window) {
-
 var
   trim_fn = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
 
@@ -453,95 +445,322 @@ var
       }
   },
 
+  _find_end_quote = function(str, quote, start) {
+      var j = start || 0, l = quote.length;
+      do {
+          j = str.indexOf(quote, j + l);
+          if (j === -1) { error('Missing end quote: ' + str); }
+      } while (str.charAt(j -1) === '\\');
+      return j;
+  },
+
+  _parse_string = function(str, start) {
+
+      /** Borrowed some code from json_parse.js by crokford. */
+      start = start || 0;
+
+      var ch = str.charAt(start), at = start + 1, quote = ch, at_quote = str.indexOf(quote, at),
+          hex, i, uffff, string = '',
+
+          next = function() {
+              return ch = str.charAt(at ++);
+          },
+
+          find = function() {
+
+              if (at_quote < at) {
+                  at_quote = str.indexOf(quote, at);
+                  if (at_quote === -1) {
+                      error('expecting end quote: ' + str);
+                  }
+              }
+              var at0 = at, m;
+              at = str.indexOf('\\', at);
+              if (at === -1) {
+                  at = at_quote;
+              } else if ( at_quote < at) {
+                  m = at_quote;
+                  at_quote = str.indexOf(quote, at);
+                  at = m;
+
+                  if (at_quote === -1) {
+                      error('expecting end quote: ' + str);
+                  }
+              }
+              if (at0 !== at) {
+                  string += str.slice(at0, at);
+              }
+              return ch = str.charAt(at++);
+          },
+
+          escapee = {
+              '"':  '"',
+              "'":  "'",
+              '\\': '\\',
+              '/':  '/',
+              'b':  '\b',
+              'f':  '\f',
+              'n':  '\n',
+              'r':  '\r',
+              't':  '\t'
+          };
+      
+      while (find()) {
+          if (ch === quote) {
+              return [ string, at ];
+          }
+          if (ch === '\\') {
+              next();
+              if (ch === 'u') {
+                  uffff = 0;
+                  for (i = 0; i < 4; i += 1) {
+                      hex = parseInt(next(), 16);
+                      if (!isFinite(hex)) {
+                          break;
+                      }
+                      uffff = uffff * 16 + hex;
+                  }
+                  string += String.fromCharCode(uffff);
+              } else if (typeof escapee[ch] === 'string') {
+                  string += escapee[ch];
+              } else {
+                  break;
+              }
+          }
+      }
+      error('Bad string: ' + str);
+  },
+
+  _parser = function(input, ctx) {
+  var
+    status = 'expression', // current status
+
+    position = 0, // position of reading input
+
+    position_token = 0, // position of next token
+
+    regx_nonblank = /(?=\S|\n)/g,
+
+    regx_element = /^\s*(\w+)(?:#([\d\w-]+))?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(?:&([\d\w\.-]+))?(?=\s|$)/,
+
+    regx_attr = /^([\w-]+)\s*=\s*(?:["']|(?:\$([\d\.\w]+)))(?=\s|$)/,
+
+    node,
+
+    nodeStack = [ctx.createDocumentFragment()],
+
+    fn,
+
+    _sub_expression_mark = function() {
+        position = position_token +1;
+        nodeStack.push(node);
+        node = undefined;
+        status = 'expression';
+    },
+
+    _eof = function() {
+        var e;
+        nodeStack.push(node);
+        node = nodeStack[0];
+
+        while( nodeStack.length > 1 ) {
+            e = nodeStack.pop();
+            nodeStack[nodeStack.length -1].appendChild(e);
+        }
+
+        status = 'end';
+    },
+
+    actionMapping = {
+
+    line: {
+    },
+
+    expression: {
+        begin: function() {
+          var n;
+
+          regx_nonblank.lastIndex = position;
+          regx_nonblank.exec(input);
+          n = regx_nonblank.lastIndex;
+        },
+
+        letter: function() {
+          var str = input.substring(position_token),
+              group = regx_element.exec(str),
+              element;
+
+          if ( ! group ) { error('Incorrect element expression: ' + str.substring(0, str.search(/\n|$/) ) ); }
+
+          node = element = ctx.createElement( group[1] );
+
+          if (group[2]) {
+              element.setAttribute('id', group[2]);
+          }
+          if (group[3]) {
+              element.setAttribute('class', group[3].substring(1).replace(/\./, ' '));
+          }
+          if (group[4]) {
+              ls = group[4].split(/:/);
+              for (i = 1,j = ls.length; i<j; i++) {
+                  element.setAttribute.apply(element, _pesudo_map[ls[i]]);
+              }
+          }
+          if (group[5]) {
+              element.setAttribute('name', group[5]);
+          }
+
+          position = position_token + group[0].length;
+          status = 'element';
+        },
+
+        string: function() {
+          var str = input.substring(position_token),
+              j = 0, quote = str.charAt(0), group, val;
+
+          if (str.substring(0, 3) === '"""') {
+              j = _find_end_quote(str, '"""', 0);
+              val = str.substring(3, j).replace(/\\"""/, '"""');
+              j += 3;
+          } else {
+              group = _parse_string(str);
+              val = group[0];
+              j = group[1];
+          }
+          node = ctx.createTextNode(val);
+
+          position = position_token + j;
+          status = 'text';
+        },
+
+        '$': function() {
+          var i = 0, j, str = s, name, val;
+          j = str.search(/\s|$/);
+          name = str.substring(1, j);
+          node = ctx.getCtxNode(name);
+
+          position += j;
+          status = 'context-content';
+        }
+    },
+
+    element: {
+        letter: function() {
+          var str = input.substring(position_token),
+              group = regx_attr.exec(str),
+              name, j;
+
+          if ( ! group ) { error('Inproper attribute: ' + str.substring(0, str.search(/\n|$/) ) ); }
+
+          name = group[1];
+
+          if (group[2]) {
+              val = ctx.getCtxContent( group[2] );
+              j = group[0].length;
+          } else {
+              group = _parse_string(str, group[0].length -1);
+              val = group[0];
+              j = group[1];
+          }
+
+          node.setAttribute(name, val);
+
+          position = position_token + j;
+          status = 'element-attr';
+        },
+
+        '>': _sub_expression_mark,
+
+        eof: _eof
+    },
+
+    'element-attr': {
+        string: function() {
+          var str = input.substring(position_token),
+              j = 0, quote = str.charAt(0), val, group;
+
+          if (str.substring(0, 3) === '"""') {
+              j = _find_end_quote(str, '"""', 0);
+              val = str.substring(3, j).replace('\\"""', '"""');
+              j += 3;
+          } else {
+              group = _parse_string(str);
+              val = group[0];
+              j = group[1];
+          }
+
+          node.appendChild(ctx.createTextNode(val));
+
+          position = position_token + j;
+          status = 'element-text';
+        },
+
+        '>': _sub_expression_mark,
+
+        eof: _eof
+    },
+
+    'text': {
+        '>': _sub_expression_mark,
+
+        eof: _eof
+    },
+
+    'context-content': {
+        '>': _sub_expression_mark,
+
+        eof: _eof
+    },
+
+    'element-text': {
+        '>': _sub_expression_mark,
+
+        eof: _eof
+    }
+
+    },
+    
+    regx_recotoken = /(?=[\S\n]|$)/g,
+
+    reco_token = function() {
+        regx_recotoken.lastIndex = position;
+        regx_recotoken.exec(input);
+
+        if ( regx_recotoken.lastIndex === input.length ) return 'eof';
+
+        position_token = regx_recotoken.lastIndex;
+        var ch = input.charAt(position_token);
+
+        switch (ch) {
+        case '\n': return 'eol';
+
+        case '>':
+        case '!':
+        case '$':
+            return ch;
+
+        case '"':
+        case "'":
+            return 'string';
+
+        default:
+            return 'letter';
+        }
+    };
+
+    actionMapping.element.string = actionMapping['element-attr'].string;
+
+    while (status !== 'end') {
+        fn = actionMapping[status][reco_token()];
+        fn();
+    }
+
+    console.log(nodeStack);
+  },
+
   _expression = (function() {
 
   var
-    _find_end_quote = function(str, quote, start) {
-        var j = start || 0, l = quote.length;
-        do {
-            j = str.indexOf(quote, j + l);
-            if (j === -1) { error('Missing end quote: ' + str); }
-        } while (str.charAt(j -1) === '\\');
-        return j;
-    },
-
-    _parse_string = function(str, start) {
-
-        /** Borrowed some code from json_parse.js by crokford. */
-        start = start || 0;
-
-        var ch = str.charAt(start), at = start + 1, quote = ch, at_quote = str.indexOf(quote, at),
-            hex, i, uffff, string = '',
-
-            next = function() {
-                return ch = str.charAt(at ++);
-            },
-
-            find = function() {
-
-                if (at_quote < at) {
-                    at_quote = str.indexOf(quote, at);
-                    if (at_quote === -1) {
-                        error('expecting end quote: ' + str);
-                    }
-                }
-                var at0 = at, m;
-                at = str.indexOf('\\', at);
-                if (at === -1) {
-                    at = at_quote;
-                } else if ( at_quote < at) {
-                    m = at_quote;
-                    at_quote = str.indexOf(quote, at);
-                    at = m;
-
-                    if (at_quote === -1) {
-                        error('expecting end quote: ' + str);
-                    }
-                }
-                if (at0 !== at) {
-                    string += str.slice(at0, at);
-                }
-                return ch = str.charAt(at++);
-            },
-
-            escapee = {
-                '"':  '"',
-                "'":  "'",
-                '\\': '\\',
-                '/':  '/',
-                'b':  '\b',
-                'f':  '\f',
-                'n':  '\n',
-                'r':  '\r',
-                't':  '\t'
-            };
-        
-        while (find()) {
-            if (ch === quote) {
-                return [ string, at ];
-            }
-            if (ch === '\\') {
-                next();
-                if (ch === 'u') {
-                    uffff = 0;
-                    for (i = 0; i < 4; i += 1) {
-                        hex = parseInt(next(), 16);
-                        if (!isFinite(hex)) {
-                            break;
-                        }
-                        uffff = uffff * 16 + hex;
-                    }
-                    string += String.fromCharCode(uffff);
-                } else if (typeof escapee[ch] === 'string') {
-                    string += escapee[ch];
-                } else {
-                    break;
-                }
-            }
-        }
-        error('Bad string: ' + str);
-    },
-
     _ctx_node = function(s, ctx) {
         var i = 0, j, str = s, name, val;
         j = str.search(/\s|$/);
@@ -950,8 +1169,4 @@ var
       _markless._document = _document;
       _markless._Context = Context;
   };
-
-  window.markless = _markless;
-
-})(window);
 

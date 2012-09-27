@@ -73,11 +73,12 @@ var
       }
   },
 
-  _build_context = function(doc, superCtx) {
-      var i = 0, j = arguments.length, arg = arguments[0], attrs = {};
+  _build_context = function() {
+      var doc, superCtx, i = 0, j = arguments.length, arg = arguments[0], attrs = {};
 
       if ( arg instanceof HTMLDocument || arg === _document ) {
           i++;
+          doc = arg;
       } else {
           doc = _document;
       }
@@ -86,8 +87,6 @@ var
       if ( arg instanceof Context ) {
           superCtx = arg;
           i++;
-      } else {
-          superCtx = undefined;
       }
 
       for (; i < j; i++) {
@@ -114,7 +113,7 @@ var
           vargs[i + 1] = e;
       }
 
-      return new Context(doc, vargs);
+      return new Context(doc, undefined, vargs);
   },
   
   _appendChild = function(node) {

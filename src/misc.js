@@ -28,3 +28,5 @@
       _markless._Context = Context;
   };
 
+  window.markless = _markless;
+

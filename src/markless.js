@@ -494,7 +494,7 @@ var
           e = args[i];
           vargs[i] = e;
       }
-      return new Context(doc, vargs);
+      return _build_context(doc, vargs);
   },
 
   _markless = function(str, ctx) {

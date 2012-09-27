@@ -87,11 +87,12 @@ var
       }
   },
 
-  _build_context = function(doc, superCtx) {
-      var i = 0, j = arguments.length, arg = arguments[0], attrs = {};
+  _build_context = function() {
+      var doc, superCtx, i = 0, j = arguments.length, arg = arguments[0], attrs = {};
 
       if ( arg instanceof HTMLDocument || arg === _document ) {
           i++;
+          doc = arg;
       } else {
           doc = _document;
       }
@@ -100,8 +101,6 @@ var
       if ( arg instanceof Context ) {
           superCtx = arg;
           i++;
-      } else {
-          superCtx = undefined;
       }
 
       for (; i < j; i++) {
@@ -128,7 +127,7 @@ var
           vargs[i + 1] = e;
       }
 
-      return new Context(doc, vargs);
+      return new Context(doc, undefined, vargs);
   },
   
   _appendChild = function(node) {
@@ -531,23 +530,72 @@ var
       error('Bad string: ' + str);
   },
 
-  _parser = function(input, ctx) {
+  _adjust_stack = function(indent, es, is) {
+
+      var pop_num = 0, last, got = false, i, e;
+
+      if (indent === 0) {
+          pop_num = is.length;
+
+      } else if (is.length !== 0) {
+          last = is[is.length -1];
+
+          if (last === indent ) {
+              pop_num = 1;
+
+          } else if (last.length < indent.length) { // 
+              if (indent.indexOf(last) !== 0) { // incorrent indention
+                  error('Incorret indention of line: '+ s);
+              }
+              pop_num = 0;
+
+          } else { //last.length > indent.length
+              if (last.indexOf(indent) !== 0) { // incorrent indention
+                  error('Incorret indention of line: '+ s);
+              }
+              for (i = is.length -1; i >= 0; i--) {
+                  if (indent === is[i]) {
+                      pop_num = is.length - i;
+                      got = true;
+                      break;
+                  }
+              }
+              if (! got) {
+                  error('Incorret indention of line: '+ s);
+              }
+          }
+      }
+
+      while (pop_num -- > 0) {
+          is.pop();
+          e = es.pop();
+          es[ es.length -1 ].appendChild( e );
+      }
+  },
+
+  _parse = function(input, ctx) {
   var
-    status = 'expression', // current status
+    status = 'line', // current status
 
     position = 0, // position of reading input
 
     position_token = 0, // position of next token
 
-    regx_nonblank = /(?=\S|\n)/g,
-
     regx_element = /^\s*(\w+)(?:#([\d\w-]+))?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(?:&([\d\w\.-]+))?(?=\s|$)/,
 
-    regx_attr = /^([\w-]+)\s*=\s*(?:["']|(?:\$([\d\.\w]+)))(?=\s|$)/,
+    regx_attr = /^([\w-]+)\s*=\s*(?:["']|(?:\$([\d\.\w]+(?=\s|$))))/,
 
     node,
 
-    nodeStack = [ctx.createDocumentFragment()],
+    nodeStack = [],
+
+    lineStack = [ ctx.createDocumentFragment() ],
+
+    indention,
+
+    indentionStack = [],
+
+    token,
 
     fn,
 
@@ -558,32 +606,56 @@ var
         status = 'expression';
     },
 
+    // end of file(input)
     _eof = function() {
+
+        _adjust_stack( 0, lineStack, indentionStack );
+        node = lineStack[0];
+        status = 'end';
+    },
+
+    // end of line
+    _eol = function() {
         var e;
         nodeStack.push(node);
-        node = nodeStack[0];
 
         while( nodeStack.length > 1 ) {
             e = nodeStack.pop();
             nodeStack[nodeStack.length -1].appendChild(e);
         }
 
-        status = 'end';
+        lineStack.push( nodeStack.pop() );
+        indentionStack.push( indention );
+
+        if ( input.charAt(position_token) === '\n' ) position = position_token +1;
+        status = 'line';
+    },
+
+    _save_indention = function() {
+        indention = input.substring( position, position_token );
+        _adjust_stack( indention, lineStack, indentionStack );
+
+        position = position_token;
+        status = 'expression';
     },
 
     actionMapping = {
 
     line: {
+        eof: _eof,
+
+        eol: function() {
+            if ( input.charAt(position_token) === '\n' )
+                position = position_token +1;
+        },
+
+        letter: _save_indention,
+        quote: _save_indention,
+        '$': _save_indention,
+        '!': _save_indention
     },
 
     expression: {
-        begin: function() {
-          var n;
-
-          regx_nonblank.lastIndex = position;
-          regx_nonblank.exec(input);
-          n = regx_nonblank.lastIndex;
-        },
 
         letter: function() {
           var str = input.substring(position_token),
@@ -614,7 +686,7 @@ var
           status = 'element';
         },
 
-        string: function() {
+        quote: function() {
           var str = input.substring(position_token),
               j = 0, quote = str.charAt(0), group, val;
 
@@ -634,18 +706,25 @@ var
         },
 
         '$': function() {
-          var i = 0, j, str = s, name, val;
+          var str = input.substring(position_token),
+              i = 0, j, name, val;
           j = str.search(/\s|$/);
           name = str.substring(1, j);
           node = ctx.getCtxNode(name);
 
-          position += j;
+          position = position_token + j;
           status = 'context-content';
-        }
+        },
+
+        '!': function() {
+        },
     },
 
     element: {
         letter: function() {
+          if (position === position_token)
+              error('Need blankspace between 2 attributes: ' + input.substring(position) );
+
           var str = input.substring(position_token),
               group = regx_attr.exec(str),
               name, j;
@@ -670,12 +749,12 @@ var
         },
 
         '>': _sub_expression_mark,
-
-        eof: _eof
+        eof: _eol,
+        eol: _eol
     },
 
     'element-attr': {
-        string: function() {
+        quote: function() {
           var str = input.substring(position_token),
               j = 0, quote = str.charAt(0), val, group;
 
@@ -696,26 +775,26 @@ var
         },
 
         '>': _sub_expression_mark,
-
-        eof: _eof
+        eof: _eol,
+        eol: _eol
     },
 
     'text': {
         '>': _sub_expression_mark,
-
-        eof: _eof
+        eof: _eol,
+        eol: _eol
     },
 
     'context-content': {
         '>': _sub_expression_mark,
-
-        eof: _eof
+        eof: _eol,
+        eol: _eol
     },
 
     'element-text': {
         '>': _sub_expression_mark,
-
-        eof: _eof
+        eof: _eol,
+        eol: _eol
     }
 
     },
@@ -741,21 +820,25 @@ var
 
         case '"':
         case "'":
-            return 'string';
+            return 'quote';
 
         default:
             return 'letter';
         }
     };
 
-    actionMapping.element.string = actionMapping['element-attr'].string;
+    actionMapping.element.quote = actionMapping['element-attr'].quote;
+    actionMapping['element-attr'].letter = actionMapping['element'].letter;
 
     while (status !== 'end') {
-        fn = actionMapping[status][reco_token()];
+        token = reco_token();
+        fn = actionMapping[status][token];
+
+        if ( ! fn ) { error('Unexpected input: ' + input.substring(position_token)); }
         fn();
     }
 
-    console.log(nodeStack);
+    return node.childNodes.length === 1 ?  node.childNodes[0] : node;
   },
 
   _expression = (function() {
@@ -1127,12 +1210,12 @@ var
           e = args[i];
           vargs[i] = e;
       }
-      return new Context(doc, vargs);
+      return _build_context(doc, vargs);
   },
 
   _markless = function(str, ctx) {
       ctx = _build_ctx(arguments);
-      return (str.indexOf("\n") > -1 ? _more_expression : _expression)(str, ctx);
+      return _parse(str, ctx);
   },
 
   _markmore = function(str, ctx) {
@@ -1169,4 +1252,6 @@ var
       _markless._document = _document;
       _markless._Context = Context;
   };
+
+  markless = _markless;
 

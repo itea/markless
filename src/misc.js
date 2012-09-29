@@ -3,13 +3,13 @@
       String.prototype.markless = function() {
           var args = Array.prototype.slice.call(arguments);
           args.unshift(this);
-          return _markless.apply(null, args);
+          return markless.apply(null, args);
       };
 
       String.prototype.markmore = function() {
           var args = Array.prototype.slice.call(arguments);
           args.unshift(this);
-          return _markmore.apply(null, args);
+          return markmore.apply(null, args);
       };
 
       if (Object.defineProperty) {
@@ -18,15 +18,13 @@
       }
   }
 
-  _markless.markmore = _markmore;
-  _markless.extendPesudo = _extend_pesudo;
-  _markless.buildContext = _build_context;
+  markless.markmore = markmore;
+  markless.extendPesudo = _extend_pesudo;
+  markless.buildContext = _build_context;
+  markless.Context = Context;
 
-  _markless.debug = function() {
-      _markless._pesudo_map = _pesudo_map;
-      _markless._document = _document;
-      _markless._Context = Context;
+  markless.debug = function() {
+      markless._pesudo_map = _pesudo_map;
+      markless._document = _document;
   };
-
-  window.markless = _markless;
 

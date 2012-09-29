@@ -1,2 +1,4 @@
+  window.markless = markless;
+
 })(window);
 

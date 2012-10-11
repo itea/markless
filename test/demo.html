@@ -20,7 +20,7 @@ var onload = function() {
       doc = win.document;
     }
     var input = document.getElementById('input').value,
-        docFrag = input.markmore(doc);
+        docFrag = input.markless(doc);
 
     /* remove head and body element */
     doc.documentElement.removeChild(doc.documentElement.firstChild);

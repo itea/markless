@@ -38,14 +38,7 @@ Got:
 
     <h1>Hello</h1>
 
-
-Markmore
-========
-
-Markless comes with an extended edition of it: Markmore.
-
-The difference between them is simple and straight. Markless is a 'single line' edition of markmore. While Markless could only create limited elements in a single line expression. Markmore could create much more structured elements.
-
+Markless support multi line string.
 For example:
 
     <textarea id="input-1">
@@ -59,7 +52,7 @@ For example:
         """
     </textarea>
 
-    var docFrag = markless.markmore(document.getElementById('input-1').value);
+    var docFrag = markless(document.getElementById('input-1').value);
 
 This piece of code reperesents HTML/DOM:
 
@@ -71,5 +64,18 @@ This piece of code reperesents HTML/DOM:
 
     </div>
 
+
+Markmore
+========
+
+Markless comes with an extended edition of it: Markmore.
+
+The difference between them is: Markless create DOM directly while Markmore return a DOM like structure which could be converted to real DOM repeatly. That is, Markmore provide a template feature.
+
+In the previous example, same effect could be done by using markmore:
+
+    var template1 = markless.markmore(document.getElementById('input-1').value);
+    var docFrag = template1.realize();
+    
 More details and manual about markless/markmore, please read wiki.
 

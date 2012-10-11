@@ -41,7 +41,8 @@
           }
       }
 
-      document.body.appendChild(document.getElementById("template1").firstChild.textContent.markmore());
+      var tpl = markless.markmore(document.getElementById("template1").firstChild.textContent);
+      document.body.appendChild( tpl.realize() );
 
 
   };

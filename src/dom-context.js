@@ -118,7 +118,7 @@ var
   
   _appendChild = function(node) {
       this.childNodes.push(node);
-      node.parent = this;
+      node.parentNode = this;
   };
 
   extend(_Node.prototype, {});

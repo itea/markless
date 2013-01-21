@@ -1,4 +1,4 @@
   window.markless = markless;
 
-})(window);
+})(typeof window === 'undefined' ? GLOBAL : window);
 

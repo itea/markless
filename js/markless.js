@@ -1,6 +1,6 @@
 /* Markless
  * version 1.1
- * itea 2012
+ * itea 2012 - 2013
  * https://github.com/itea/markless
  * MIT-LICENSE
  */
@@ -11,10 +11,11 @@ var
       throw new Error(s);
   },
 
-  extend = function(target, src) {
-      var e;
-      for (e in src) {
-          target[e] = src[e];
+  extend = function(target) {
+      var e, i = 1, j = arguments.length, src;
+      for (; i < j; i++) {
+          src = arguments[i];
+          for (e in src) target[e] = src[e];
       }
       return target;
   };
@@ -63,12 +64,6 @@ var
       this.name = name;
   },
 
-  CtxCommand = function(name) {
-      this.name = name;
-      this._args = [];
-      this.childNodes = [];
-  },
-
   Context = function(doc, superCtx, params) {
       this.doc = doc;
       this.attrs = params || {};
@@ -86,10 +81,6 @@ var
 
           this.getCtxContent = function(name) {
               return new CtxContent(name);
-          };
-
-          this.createCtxCommand = function(name) {
-              return new CtxCommand(name);
           };
       }
   },
@@ -238,29 +229,6 @@ var
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments);
           return ctx.getCtxContent(this.name);
-      }
-  });
-
-  CtxCommand.prototype = extend(new _Node(), {
-      nodeType: 84,
-
-      appendChild: _appendChild,
-
-      realize: function(ctx) {
-          var ctx = _build_realize_ctx(arguments),
-              cmdfn = _get_command_fn(this.name),
-              vfn;
-
-          vfn = cmdfn.call(this, this._args.slice(), ctx);
-          return vfn;
-      },
-
-      appendArgument: function(arg) {
-          this._args.push(arg);
-      },
-
-      setArguments: function(args) {
-          this._args = args.slice();
       }
   });
 
@@ -814,6 +782,75 @@ var
       return _parse(str, ctx);
   };
 
+  var
+
+  _args = function (_arguments) {
+      var i = 0, j = _arguments.length, args = [];
+      for (; i< j; i++) args.push( _arguments[i] );
+      return args;
+  },
+
+  mix = function () {
+      var view, initfn, extendx = [], i = 0, j = arguments.length, e;
+
+      if (typeof arguments[0] === "string" || arguments[0] == null) {
+          view = arguments[ i++ ];
+      }
+
+      if (i < j && (typeof arguments[i] === "function" || arguments[i] == null)) {
+          initfn = arguments[ i++ ];
+      }
+      
+      while (i < j) {
+          e = arguments[ i++ ];
+          if ( !e ) continue;
+          if ( typeof e === "object" ) extendx.push(e);
+      }
+
+      if (typeof arguments[ j -1 ] === "function" && ! initfn)
+          initfn = arguments[ j -1 ];
+
+      return mixing(view, initfn, extendx);
+  },
+
+  mixing = function (view, initfn, extendx) {
+      var Mixed = function () {
+          var node, initval;
+
+          /* if Mixed.view is a blank string, markless returns a DocumentFragment.
+             if Mixed.view is null/undefined, node is undefined. */
+          if (Mixed.view != null && typeof Mixed.view === "string") node = markless(Mixed.view);
+
+          if ( this instanceof Mixed ) { // new instance of Mixed, constructor invokement
+              this.node = node;
+              if (node) node._mix = this;
+
+          } else { // function invoke
+              /* for function invoke, if node is undefined/null, create a DocumentFragment for it. */
+              if (!node) node = document.createDocumentFragment();
+
+              /* make _mix and node property point to node itself,
+               * so that extended methods is usable for both function invokement
+               * and constructor invokement. */
+              node._mix = node.node = node;
+              extend.apply( null, [node].concat(extendx) );
+          }
+          
+          if (Mixed.initfn) initval = Mixed.initfn.apply( node || this, _args(arguments) );
+          
+          if (initval != null) return initval;
+          if (node) return node;
+      };
+
+      Mixed.view = view;
+      Mixed.initfn = initfn;
+
+      if (extendx && extendx.length > 0) {
+          extend.apply( null, [Mixed.prototype].concat(extendx) );
+      }
+      return Mixed;
+  };
+
   if (true) {
 
       String.prototype.markless = function() {
@@ -835,6 +872,7 @@ var
   }
 
   markless.markmore = markmore;
+  markless.mix = mix;
   markless.extendPesudo = _extend_pesudo;
   markless.buildContext = _build_context;
   markless.Context = Context;
@@ -846,5 +884,5 @@ var
 
   window.markless = markless;
 
-})(typeof window === 'undefined' ? GLOBAL : window);
+})(window);
 

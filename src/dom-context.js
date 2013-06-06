@@ -42,12 +42,6 @@ var
       this.name = name;
   },
 
-  CtxCommand = function(name) {
-      this.name = name;
-      this._args = [];
-      this.childNodes = [];
-  },
-
   Context = function(doc, superCtx, params) {
       this.doc = doc;
       this.attrs = params || {};
@@ -65,10 +59,6 @@ var
 
           this.getCtxContent = function(name) {
               return new CtxContent(name);
-          };
-
-          this.createCtxCommand = function(name) {
-              return new CtxCommand(name);
           };
       }
   },
@@ -217,29 +207,6 @@ var
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments);
           return ctx.getCtxContent(this.name);
-      }
-  });
-
-  CtxCommand.prototype = extend(new _Node(), {
-      nodeType: 84,
-
-      appendChild: _appendChild,
-
-      realize: function(ctx) {
-          var ctx = _build_realize_ctx(arguments),
-              cmdfn = _get_command_fn(this.name),
-              vfn;
-
-          vfn = cmdfn.call(this, this._args.slice(), ctx);
-          return vfn;
-      },
-
-      appendArgument: function(arg) {
-          this._args.push(arg);
-      },
-
-      setArguments: function(args) {
-          this._args = args.slice();
       }
   });
 

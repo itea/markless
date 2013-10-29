@@ -1,21 +1,21 @@
 /* Markless
- * version 1.0
- * itea 2012
+ * version 1.1
+ * itea 2012 - 2013
  * https://github.com/itea/markless
  * MIT-LICENSE
  */
 (function(window) {
 
 var
-  trim_fn = String.prototype.trim || function() { return this.replace(/^\s*|\s*$/, ''); },
-
   error = function(s) {
       throw new Error(s);
   },
 
-  extend = function(target, src) {
-      for (var e in src) {
-          target[e] = src[e];
+  extend = function(target) {
+      var e, i = 1, j = arguments.length, src;
+      for (; i < j; i++) {
+          src = arguments[i];
+          for (e in src) target[e] = src[e];
       }
       return target;
   };
@@ -64,12 +64,6 @@ var
       this.name = name;
   },
 
-  CtxCommand = function(name) {
-      this.name = name;
-      this._args = [];
-      this.childNodes = [];
-  },
-
   Context = function(doc, superCtx, params) {
       this.doc = doc;
       this.attrs = params || {};
@@ -88,17 +82,13 @@ var
           this.getCtxContent = function(name) {
               return new CtxContent(name);
           };
-
-          this.createCtxCommand = function(name) {
-              return new CtxCommand(name);
-          };
       }
   },
 
   _build_context = function() {
       var doc, superCtx, i = 0, j = arguments.length, arg = arguments[0], attrs = {};
 
-      if ( arg instanceof HTMLDocument || arg === _document ) {
+      if ( arg == window.document || arg instanceof HTMLDocument || arg === _document ) {
           i++;
           doc = arg;
       } else {
@@ -126,7 +116,9 @@ var
 
       var doc = window.document, vargs = {}, i, len = args.length, e;
 
-      if (args[len -1] instanceof HTMLDocument || args[len -1] === _document) {
+      if ( args[len -1] == window.document
+          || args[len -1] instanceof HTMLDocument
+          || args[len -1] === _document ) {
           doc = args[len -1];
           len --;
       }
@@ -140,7 +132,7 @@ var
   
   _appendChild = function(node) {
       this.childNodes.push(node);
-      node.parent = this;
+      node.parentNode = this;
   };
 
   extend(_Node.prototype, {});
@@ -242,29 +234,6 @@ var
       }
   });
 
-  CtxCommand.prototype = extend(new _Node(), {
-      nodeType: 84,
-
-      appendChild: _appendChild,
-
-      realize: function(ctx) {
-          var ctx = _build_realize_ctx(arguments),
-              cmdfn = _get_command_fn(this.name),
-              vfn;
-
-          vfn = cmdfn.call(this, this._args.slice(), ctx);
-          return vfn;
-      },
-
-      appendArgument: function(arg) {
-          this._args.push(arg);
-      },
-
-      setArguments: function(args) {
-          this._args = args.slice();
-      }
-  });
-
   extend(Context.prototype, {
       createTextNode: function(text) {
           return this.doc.createTextNode(text);
@@ -332,86 +301,6 @@ var
   });
 
 var
-  _command_fn_index = {},
-
-  _put_command_fn = function(cmd, fn) {
-      if (typeof cmd === 'string') {
-          _command_fn_index[cmd] = fn;
-
-      } else if (typeof cmd === 'object') {
-          for (var v in cmd) {
-              _command_fn_index[v] = cmd[v];
-          }
-      }
-  },
-
-  _get_command_fn = function(cmd) {
-      var fn = _command_fn_index[cmd];
-      if ( !fn ) { error('Undefined command: ' + cmd); }
-      return fn;
-  },
-
-  _asset_args = function(types, args) {
-      if ( ! types instanceof Array ) {
-          types = types.split(/\s+/);
-      }
-
-      var i, j, e, arg;
-      for (i = 0, j = types.length; i < j; i++) {
-          e = types[i];
-          arg = args[i];
-
-          switch(e) {
-          case 'S': // Symbol
-              if ( ! arg instanceof Symbol ) return false;
-              break;
-
-          case 's': // String
-              if ( ! typeof arg === 'string' ) return false;
-              break;
-
-          case 'C': // CtxContent
-              if ( ! arg instanceof CtxContent ) return false;
-              break;
-          }
-      }
-
-      return true;
-  },
-  
-  Symbol = function(name) {
-      this.name = name;
-  };
-
-  Symbol.prototype.toString = function() {
-      return this.name;
-  };
-
-  _put_command_fn({
-
-  'forEach': function(args, ctx) {
-      if ( ! _asset_args('S S C', args) ) error('Inproper arguments: ' + args);
-
-      var symbol = args[0],
-          iter = args[2].realize(ctx),
-          i, j, c, e, f, newCtx, docFrag = ctx.createDocumentFragment();
-
-      for ( e in iter) {
-          c = {};
-          c[symbol.name] = iter[e];
-          newCtx = _build_context(ctx, c);
-
-          for (i = 0, j = this.childNodes.length; i < j; i++) {
-              f = this.childNodes[i];
-              docFrag.appendChild( f.realize(newCtx) );
-          }
-      }
-
-      return docFrag;
-  }
-
-  });
-var
   _pesudo_map = {
       'text':     ['type', 'text'],
       'password': ['type', 'password'],
@@ -441,7 +330,7 @@ var
       'checked':  ['checked', 'checked']
   },
 
-  _extend_pesudo = function(k, v1, v2) {
+  _extend_pesudo = function (k, v1, v2) {
       if (typeof k === 'string') {
           _pesudo_map[k] = [ v1, v2 ];
 
@@ -452,7 +341,7 @@ var
       }
   },
 
-  _find_end_quote = function(str, quote, start) {
+  _find_end_quote = function (str, quote, start) {
       var j = start || 0, l = quote.length;
       do {
           j = str.indexOf(quote, j + l);
@@ -461,7 +350,7 @@ var
       return j;
   },
 
-  _parse_string = function(str, start) {
+  _parse_string = function (str, start) {
 
       /** Borrowed some code from json_parse.js by crokford. */
       start = start || 0;
@@ -469,11 +358,11 @@ var
       var ch = str.charAt(start), at = start + 1, quote = ch,
           hex, i, uffff, string = '', regx_find = /(?=[\\\n"']|$)/g,
 
-          next = function() {
+          next = function () {
               return ch = str.charAt(at ++);
           },
 
-          find = function() {
+          find = function () {
               var at0 = at;
 
               regx_find.lastIndex = at;
@@ -485,7 +374,7 @@ var
               }
 
               if (at0 !== at) {
-                  string += str.slice(at0, at);
+                  string += str.substring(at0, at);
               }
               return ch = str.charAt(at++);
           },
@@ -528,7 +417,7 @@ var
       error('Bad string: ' + str);
   },
 
-  _adjust_stack = function(indent, es, is) {
+  _adjust_stack = function (indent, es, is) {
 
       var pop_num = 0, last, got = false, i, e;
 
@@ -543,13 +432,13 @@ var
 
           } else if (last.length < indent.length) { // 
               if (indent.indexOf(last) !== 0) { // incorrent indention
-                  error('Incorret indention of line: '+ s);
+                  error('Incorrect indention of line');
               }
               pop_num = 0;
 
           } else { //last.length > indent.length
               if (last.indexOf(indent) !== 0) { // incorrent indention
-                  error('Incorret indention of line: '+ s);
+                  error('Incorrect indention of line');
               }
               for (i = is.length -1; i >= 0; i--) {
                   if (indent === is[i]) {
@@ -559,7 +448,7 @@ var
                   }
               }
               if (! got) {
-                  error('Incorret indention of line: '+ s);
+                  error('Incorrect indention of line');
               }
           }
       }
@@ -567,11 +456,14 @@ var
       while (pop_num -- > 0) {
           is.pop();
           e = es.pop();
-          es[ es.length -1 ].appendChild( e );
+          
+          if ( ! e.parentNode ) {
+              es[ es.length -1 ].appendChild( e );
+          }
       }
   },
 
-  _parse = function(input, ctx) {
+  _parse = function (input, ctx) {
   var
     status = 'line', // current status
 
@@ -579,12 +471,13 @@ var
 
     position_token = 0, // position of next token
 
-    regx_element = /^\s*(\w+)(?:#([\d\w-]+))?((?:\.[\d\w-]+)*)?((?:\:[\w-]+)*)?(?:&([\d\w\.-]+))?(?=\s|$)/,
+    regx_element = /^[\x20\t]*([A-Za-z]\w*)(?:#([\w-]+))?((?:\.[\w-]+)*)?((?:\:[A-Za-z_-]+)*)?(?:&([\w\.-]+))?(?=\s|$)/,
 
-    regx_attr = /^([\w-]+)\s*=\s*(?:["']|(?:\$([\d\.\w]+(?=\s|$))))/,
+    regx_attr = /^([\w-]+)[\x20\t]*=[\x20\t]*(?:["']|(?:\$([\.\w]+(?=\s|$))))/,
 
     node,
 
+    // nodes in a single line will be collected in nodeStack, until EOL
     nodeStack = [],
 
     lineStack = [ ctx.createDocumentFragment() ],
@@ -597,7 +490,7 @@ var
 
     fn,
 
-    _sub_expression_mark = function() {
+    _sub_expression_mark = function () {
         position = position_token +1;
         nodeStack.push(node);
         node = undefined;
@@ -605,7 +498,7 @@ var
     },
 
     // end of file(input)
-    _eof = function() {
+    _eof = function () {
 
         _adjust_stack( 0, lineStack, indentionStack );
         node = lineStack[0];
@@ -613,7 +506,7 @@ var
     },
 
     // end of line
-    _eol = function() {
+    _eol = function () {
         var e;
         nodeStack.push(node);
 
@@ -629,7 +522,7 @@ var
         status = 'line';
     },
 
-    _save_indention = function() {
+    _save_indention = function () {
         indention = input.substring( position, position_token );
         _adjust_stack( indention, lineStack, indentionStack );
 
@@ -642,7 +535,7 @@ var
     line: {
         eof: _eof,
 
-        eol: function() {
+        eol: function () {
             if ( input.charAt(position_token) === '\n' )
                 position = position_token +1;
         },
@@ -651,7 +544,7 @@ var
         quote: _save_indention,
         '$': _save_indention,
 
-        '#': function() {
+        '#': function () {
             // ignore the rest part after the comment mark
             position = input.indexOf('\n', position) + 1;
             position = position || input.length;
@@ -660,7 +553,26 @@ var
 
     expression: {
 
-        letter: function() {
+        eol: function () {
+            var e, node = nodeStack[ nodeStack.length -1 ];
+
+            while( nodeStack.length > 1 ) {
+                e = nodeStack.pop();
+                nodeStack[nodeStack.length -1].appendChild(e);
+            }
+
+            lineStack.push( nodeStack.pop() );
+            indentionStack.push( indention );
+
+            _adjust_stack( indention, lineStack, indentionStack );
+            lineStack.push( node );
+            indentionStack.push ( indention );
+
+            if ( input.charAt(position_token) === '\n' ) position = position_token +1;
+            status = 'line';
+        },
+
+        letter: function () {
           var str = input.substring(position_token),
               group = regx_element.exec(str),
               element;
@@ -689,7 +601,7 @@ var
           status = 'element';
         },
 
-        quote: function() {
+        quote: function () {
           var str = input.substring(position_token),
               j = 0, quote = str.charAt(0), group, val;
 
@@ -708,7 +620,7 @@ var
           status = 'text';
         },
 
-        '$': function() {
+        '$': function () {
           var str = input.substring(position_token),
               i = 0, j, name, val;
           j = str.search(/\s|$/);
@@ -722,7 +634,7 @@ var
     },
 
     element: {
-        letter: function() {
+        letter: function () {
           if (position === position_token)
               error('Need blankspace between 2 attributes: ' + input.substring(position) );
 
@@ -755,7 +667,7 @@ var
     },
 
     'element-attr': {
-        quote: function() {
+        quote: function () {
           var str = input.substring(position_token),
               j = 0, quote = str.charAt(0), val, group;
 
@@ -802,7 +714,7 @@ var
     
     regx_recotoken = /(?=[\S\n]|$)/g,
 
-    reco_token = function() {
+    reco_token = function () {
         regx_recotoken.lastIndex = position;
         regx_recotoken.exec(input);
 
@@ -842,7 +754,7 @@ var
     return node.childNodes.length === 1 ?  node.childNodes[0] : node;
   },
 
-  _build_ctx = function(args) {
+  _build_ctx = function (args) {
       if (args[1] instanceof Context) {
           return args[1];
       }
@@ -851,7 +763,9 @@ var
 
       doc = window.document;
 
-      if (args[len -1] instanceof HTMLDocument || args[len -1] === _document) {
+      if ( args[len -1] == window.document
+          || args[len -1] instanceof HTMLDocument
+          || args[len -1] === _document ) {
           doc = args[len -1];
           len --;
       }
@@ -862,14 +776,83 @@ var
       return _build_context(doc, vargs);
   },
 
-  markless = function(str, ctx) {
+  markless = function (str, ctx) {
       ctx = _build_ctx(arguments);
       return _parse(str, ctx);
   },
 
-  markmore = function(str, ctx) {
+  markmore = function (str, ctx) {
       ctx = ctx || _build_context(_document);
       return _parse(str, ctx);
+  };
+
+  var
+
+  _args = function (_arguments) {
+      var i = 0, j = _arguments.length, args = [];
+      for (; i< j; i++) args.push( _arguments[i] );
+      return args;
+  },
+
+  mix = function () {
+      var view, initfn, extendx = [], i = 0, j = arguments.length, e;
+
+      if (typeof arguments[0] === "string" || arguments[0] == null) {
+          view = arguments[ i++ ];
+      }
+
+      if (i < j && (typeof arguments[i] === "function" || arguments[i] == null)) {
+          initfn = arguments[ i++ ];
+      }
+      
+      while (i < j) {
+          e = arguments[ i++ ];
+          if ( !e ) continue;
+          if ( typeof e === "object" ) extendx.push(e);
+      }
+
+      if (typeof arguments[ j -1 ] === "function" && ! initfn)
+          initfn = arguments[ j -1 ];
+
+      return mixing(view, initfn, extendx);
+  },
+
+  mixing = function (view, initfn, extendx) {
+      var Mixed = function () {
+          var node, initval;
+
+          /* if Mixed.view is a blank string, markless returns a DocumentFragment.
+             if Mixed.view is null/undefined, node is undefined. */
+          if (Mixed.view != null && typeof Mixed.view === "string") node = markless(Mixed.view);
+
+          if ( this instanceof Mixed ) { // new instance of Mixed, constructor invokement
+              this.node = node;
+              if (node) node._mix = this;
+
+          } else { // function invoke
+              /* for function invoke, if node is undefined/null, create a DocumentFragment for it. */
+              if (!node) node = document.createDocumentFragment();
+
+              /* make _mix and node property point to node itself,
+               * so that extended methods is usable for both function invokement
+               * and constructor invokement. */
+              node._mix = node.node = node;
+              extend.apply( null, [node].concat(extendx) );
+          }
+          
+          if (Mixed.initfn) initval = Mixed.initfn.apply( node || this, _args(arguments) );
+          
+          if (initval != null) return initval;
+          if (node) return node;
+      };
+
+      Mixed.view = view;
+      Mixed.initfn = initfn;
+
+      if (extendx && extendx.length > 0) {
+          extend.apply( null, [Mixed.prototype].concat(extendx) );
+      }
+      return Mixed;
   };
 
   if (true) {
@@ -893,6 +876,7 @@ var
   }
 
   markless.markmore = markmore;
+  markless.mix = mix;
   markless.extendPesudo = _extend_pesudo;
   markless.buildContext = _build_context;
   markless.Context = Context;

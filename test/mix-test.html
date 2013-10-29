@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" src="markless.js"></script>
+<script type="text/javascript">
+var mix = markless.mix;
+h1 = mix("h1", function(text) {
+	var colors = ["red", "green", "blue", "gray"], i = 0;
+	this.addEventListener('click', function (event) {
+		this.style.color = colors[ i++ %4 ];
+	});
+	this.innerText = text;
+});
+
+H2 = mix("h2", {
+	destory: function () {
+		this.node.parentNode.removeChild(this.node);
+	}}, function (text) {
+		var colors = ["red", "green", "blue", "gray"], i = 0;
+		this.addEventListener('click', function (event) {
+			this.style.color = colors[ i++ %4 ];
+		});
+		this.innerText = text;
+	});
+var Dropdown = markless.mix("select", function (ls) {
+	if (ls) this._mix.setValues(ls);
+}, {
+	setValues: function (ls) {
+		var docFrag = document.createDocumentFragment(),
+			i = 0, j = ls.length, e, node;
+		for (; i< j; i++) {
+			e = ls[i];
+			node = markless("option value=$2 > $1", e[1], e[0]);
+			//node.value = e[0];
+			docFrag.appendChild(node);
+		}
+		while (this.node.firstChild) this.node.removeChild(this.node.firstChild);
+		this.node.appendChild(docFrag);
+	}
+});
+
+var Dropdown2 = markless.mix(function(node, ls) {
+    this.node = node;
+    node._mix = this;
+	if (ls) this.setValues(ls);
+}, Dropdown.prototype);
+
+window.addEventListener('load', function () {
+	document.body.appendChild(h1("Click to change color"));
+	document.body.appendChild(new H2("Click to change color"));
+    document.body.appendChild(new Dropdown([['1','a'],['2','b']]));
+    new Dropdown2(document.getElementById('select_1'), [['1','a'],['2','b']]);
+});
+</script>
+</head>
+<body>
+<select id="select_1"></select>
+</body>
+

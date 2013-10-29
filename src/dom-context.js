@@ -42,12 +42,6 @@ var
       this.name = name;
   },
 
-  CtxCommand = function(name) {
-      this.name = name;
-      this._args = [];
-      this.childNodes = [];
-  },
-
   Context = function(doc, superCtx, params) {
       this.doc = doc;
       this.attrs = params || {};
@@ -66,17 +60,13 @@ var
           this.getCtxContent = function(name) {
               return new CtxContent(name);
           };
-
-          this.createCtxCommand = function(name) {
-              return new CtxCommand(name);
-          };
       }
   },
 
   _build_context = function() {
       var doc, superCtx, i = 0, j = arguments.length, arg = arguments[0], attrs = {};
 
-      if ( arg instanceof HTMLDocument || arg === _document ) {
+      if ( arg == window.document || arg instanceof HTMLDocument || arg === _document ) {
           i++;
           doc = arg;
       } else {
@@ -104,7 +94,9 @@ var
 
       var doc = window.document, vargs = {}, i, len = args.length, e;
 
-      if (args[len -1] instanceof HTMLDocument || args[len -1] === _document) {
+      if ( args[len -1] == window.document
+          || args[len -1] instanceof HTMLDocument
+          || args[len -1] === _document ) {
           doc = args[len -1];
           len --;
       }
@@ -118,7 +110,7 @@ var
   
   _appendChild = function(node) {
       this.childNodes.push(node);
-      node.parent = this;
+      node.parentNode = this;
   };
 
   extend(_Node.prototype, {});
@@ -217,29 +209,6 @@ var
       realize: function(ctx) {
           var ctx = _build_realize_ctx(arguments);
           return ctx.getCtxContent(this.name);
-      }
-  });
-
-  CtxCommand.prototype = extend(new _Node(), {
-      nodeType: 84,
-
-      appendChild: _appendChild,
-
-      realize: function(ctx) {
-          var ctx = _build_realize_ctx(arguments),
-              cmdfn = _get_command_fn(this.name),
-              vfn;
-
-          vfn = cmdfn.call(this, this._args.slice(), ctx);
-          return vfn;
-      },
-
-      appendArgument: function(arg) {
-          this._args.push(arg);
-      },
-
-      setArguments: function(args) {
-          this._args = args.slice();
       }
   });
 

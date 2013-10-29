@@ -19,6 +19,7 @@
   }
 
   markless.markmore = markmore;
+  markless.mix = mix;
   markless.extendPesudo = _extend_pesudo;
   markless.buildContext = _build_context;
   markless.Context = Context;

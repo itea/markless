@@ -102,7 +102,7 @@ If the first argument passed to `mix` is a blank string(""), `mix` will create a
 
 In this initialization function, it bind and click event to the H1 element and set the innerText of it.
 
-`mix` accepts one or more objects which properties would be copied to the element. For example:
+`mix` accepts one or more objects and the properties of which would be copied to the element. For example:
 
     var h2 = mix("h2", {innerText: "abc"}, {colored: true}, function () {
         // initfn, but do nothing
@@ -118,7 +118,7 @@ Objects could be put before initialization function or after it.
 
 Those two function `h2` both can create H2 element which innerText would be set to "abc" and `colored` property of the element/node as `true`.
 
-Mixing function which returned by `mix` function can be invoked in two way:
+Mixing functions which returned by `mix` can be invoked in two ways:
 
 Invoke it as a normal function or invoke it as a constructor. 
 
@@ -132,20 +132,26 @@ The instance created by constructor invokement will be set to `_mix` property on
 
     var ih2 = new h2();
     console.log(ih2._mix.colored); // it print true
+    console.log(ih2.colored); // it is undefined
     console.log(ih2._mix.innerText): // it print abc
     console.log(ih2.innerText === ""); // it print true
     console.log(ih2 === ih2._mix.node): // it print true
 
+The first argument of `mix`(markless expression) can be omitted, or passed as null/undefined. In such situation, function inokement of the mixing function will always create a document fragment while constructor invokement never. Constructor invokement will use the instance created by the constructor as `this` of the initialization function and `this.node` is undefined because document fragment is not created.
+
 markless.extendPesudo
 ========
 
-Markess use pesudoclass to shortern long attribute expression. For example:
+Markless use pesudoclass to shortern long attribute expression.
+
+For example:
 
     markless("input:text");
     markless("input type='text'");
 
 They are equivalent.
 
+Markless already defined common pesudoclasses but you can define yours.
 Markless provide a function by using which, you can define your own shortcut:
 
     markless.extendPesudo('css', 'type', 'text/css');

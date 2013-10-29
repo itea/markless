@@ -461,7 +461,9 @@ var
 
       doc = window.document;
 
-      if (args[len -1] instanceof HTMLDocument || args[len -1] === _document) {
+      if ( args[len -1] == window.document
+          || args[len -1] instanceof HTMLDocument
+          || args[len -1] === _document ) {
           doc = args[len -1];
           len --;
       }
